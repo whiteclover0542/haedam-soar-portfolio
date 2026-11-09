@@ -1,7 +1,7 @@
 """Load Haedam detection config into a fresh Graylog. Safe to re-run: anything that exists by title is skipped.
 
 python infra/graylog/bootstrap.py --url http://127.0.0.1:9000
-env: GRAYLOG_ADMIN_PASSWORD, N8N_WEBHOOK_KEY
+reads GRAYLOG_ADMIN_PASSWORD, N8N_WEBHOOK_KEY from .env (environment variables override)
 """
 import argparse
 import base64
@@ -88,8 +88,11 @@ def main():
     ap.add_argument("--url", default="http://127.0.0.1:9000")
     ap.add_argument("--live", action="store_true", help="alerts make n8n block and record tickets (default: observe)")
     args = ap.parse_args()
-    gl = Graylog(args.url, os.environ["GRAYLOG_ADMIN_PASSWORD"])
-    key = os.environ["N8N_WEBHOOK_KEY"]
+    env_file = ROOT / ".env"  # same reader as n8n/load.py; shell env wins
+    pairs = (l.split("=", 1) for l in env_file.read_text("utf-8").splitlines() if "=" in l and not l.startswith("#")) if env_file.exists() else ()
+    e = {**{k.strip(): v.strip() for k, v in pairs}, **os.environ}
+    gl = Graylog(args.url, e["GRAYLOG_ADMIN_PASSWORD"])
+    key = e["N8N_WEBHOOK_KEY"]
     for _ in range(60):  # Graylog takes a while after the container starts
         try:
             gl.call("GET", "/api/system")  # not lbstatus: it answers text/plain and fails the JSON Accept

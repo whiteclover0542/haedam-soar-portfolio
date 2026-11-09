@@ -95,7 +95,6 @@ http://127.0.0.1:8006/vnc.html 콘솔에서 설치하고, 웹 설정·대응 도
 ### 5. Graylog·n8n 설정 반입
 
 ```powershell
-$env:GRAYLOG_ADMIN_PASSWORD = "<.env 값>"; $env:N8N_WEBHOOK_KEY = "<.env 값>"
 python infra/graylog/bootstrap.py --live      # 입력·스트림·파이프라인·알림·이벤트 정의. 다시 돌려도 "생성 0"
 python infra/n8n/load.py                      # 자격 증명·워크플로 반입, 웹훅·하위 워크플로 게시
 ```
@@ -158,6 +157,7 @@ python lab/run_ticket.py S10 --restore
 | pfSense 차단 로그가 Graylog 검색에 안 나옴 | BSD syslog에 시간대가 없어 9시간 미래로 저장 | Syslog 입력 시간대 `Asia/Seoul`(bootstrap이 설정) |
 | n8n 하위 워크플로 호출이 "Workflow is not active" | n8n 2.x는 미게시 하위 워크플로를 실행하지 않음 | `load.py`가 하위 워크플로도 게시 |
 | Wazuh indexer·dashboard 재시작 반복 | 인증서를 못 읽음 / dashboard keystore `EACCES` | 2절 인증서 생성, dashboard 인증서는 `/usr/share/...`(적용됨) |
+| pfSense만 남기고 다른 볼륨을 지운 뒤 S10 pfSense 차단이 `rejected:replay_needs_reconciliation` | 티켓 번호가 `T-<날짜>-0001`부터 다시 시작돼, pfSense 대응 도구 기록(`/cf/conf/haedam-pf-response/state.json`)의 예전 요청과 겹침 | 차단 테이블이 비었는지 확인하고 그 파일을 다른 이름으로 옮긴다. 전부 새로 설치하면 생기지 않음 |
 | S10에서 pfSense 차단이 `outcome_needs_reconciliation` | `easyrule`이 테이블 반영(약 2초) 전에 끝나 즉시 읽기 실패 | 대응 도구가 반영을 기다리도록 수정(해시 `c9f561ba…`) |
 
 자세한 경위는 [docs/journal/](docs/journal/)에 있습니다. 구성별 세부 문서: [pfSense](infra/pfsense/INSTALL.md) · [Wazuh](infra/wazuh/README.md) · [n8n](infra/n8n/README.md) · [Graylog](infra/graylog/README.md).
