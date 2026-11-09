@@ -10,3 +10,4 @@ instance/
 .pytest_cache/
 .superpowers/
 infra/pfsense/iso/
+infra/wazuh/config/wazuh_indexer_ssl_certs/

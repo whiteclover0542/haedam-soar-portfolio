@@ -11,6 +11,14 @@ networks:
 
 volumes:
   pfsense-data:
+  wazuh-api-configuration:
+  wazuh-etc:
+  wazuh-logs:
+  wazuh-queue:
+  filebeat-etc:
+  filebeat-var:
+  wazuh-indexer-data:
+  wazuh-certs:
 
 services:
   # ── pfSense (원작 규칙·도구: 김명준, 컨테이너화: 반소람) ──
@@ -46,3 +54,89 @@ services:
     ports: ["127.0.0.1:8443:8443", "127.0.0.1:2222:2222"]
     mem_limit: 32m
     restart: unless-stopped
+
+  # ── Wazuh 4.9.2 single-node (원본 구성: Wazuh Inc., 단일 PC 조정: 반소람) ──
+  wazuh.manager:
+    image: wazuh/wazuh-manager:4.9.2
+    container_name: haedam-wazuh-manager
+    hostname: wazuh.manager
+    profiles: [wazuh]
+    restart: unless-stopped
+    mem_limit: 1g
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 655360, hard: 655360}
+    environment:
+      INDEXER_URL: https://wazuh.indexer:9200
+      INDEXER_USERNAME: admin
+      INDEXER_PASSWORD: SecretPassword
+      FILEBEAT_SSL_VERIFICATION_MODE: full
+      SSL_CERTIFICATE_AUTHORITIES: /etc/ssl/root-ca.pem
+      SSL_CERTIFICATE: /etc/ssl/filebeat.pem
+      SSL_KEY: /etc/ssl/filebeat.key
+      API_USERNAME: wazuh-wui
+      API_PASSWORD: MyS3cr37P450r.*-
+    networks:
+      lan: {ipv4_address: 10.250.0.4}
+    volumes:
+      - wazuh-api-configuration:/var/ossec/api/configuration
+      - wazuh-etc:/var/ossec/etc
+      - wazuh-logs:/var/ossec/logs
+      - wazuh-queue:/var/ossec/queue
+      - filebeat-etc:/etc/filebeat
+      - filebeat-var:/var/lib/filebeat
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key:ro
+
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:4.9.2
+    container_name: haedam-wazuh-indexer
+    hostname: wazuh.indexer
+    profiles: [wazuh]
+    restart: unless-stopped
+    mem_limit: 1536m
+    environment:
+      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 65536, hard: 65536}
+    networks:
+      lan: {ipv4_address: 10.250.0.6}
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - wazuh-certs:/etc/wazuh-indexer/certs:ro
+      - ./infra/wazuh/config/wazuh_indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
+      - ./infra/wazuh/config/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.key:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.pem:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:4.9.2
+    container_name: haedam-wazuh-dashboard
+    hostname: wazuh.dashboard
+    profiles: [wazuh]
+    restart: unless-stopped
+    mem_limit: 768m
+    ports: ["127.0.0.1:5601:5601"]
+    environment:
+      OPENSEARCH_HOSTS: https://wazuh.indexer:9200
+      INDEXER_USERNAME: admin
+      INDEXER_PASSWORD: SecretPassword
+      WAZUH_API_URL: https://wazuh.manager
+      DASHBOARD_USERNAME: kibanaserver
+      DASHBOARD_PASSWORD: kibanaserver
+      API_USERNAME: wazuh-wui
+      API_PASSWORD: MyS3cr37P450r.*-
+    networks:
+      lan: {ipv4_address: 10.250.0.7}
+    volumes:
+      - wazuh-certs:/etc/wazuh-dashboard/certs:ro
+      - ./infra/wazuh/config/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
+      - ./infra/wazuh/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:ro
+    depends_on: [wazuh.indexer, wazuh.manager]
