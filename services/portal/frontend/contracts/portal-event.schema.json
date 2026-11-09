@@ -6,7 +6,7 @@
   "properties":{
     "schema_version":{"const":"1.0"},"event_id":{"type":"string","format":"uuid"},
     "timestamp":{"type":"string","format":"date-time"},"source":{"const":"haedam-portal"},
-    "event_type":{"enum":["auth.login_succeeded","auth.login_failed","auth.account_locked","auth.account_unlocked","auth.password_reset","iam.role_changed","web.not_found","web.request","web.file_access","web.ip_blocked","web.ip_unblocked","petition.created","petition.updated"]},
+    "event_type":{"enum":["auth.login_succeeded","auth.login_failed","auth.account_locked","auth.account_unlocked","auth.password_reset","iam.role_changed","web.not_found","web.request","web.file_access","web.ip_blocked","web.ip_unblocked","petition.created","petition.updated","petition.create_refused","auth.posting_restricted","auth.posting_allowed"]},
     "username":{"type":["string","null"],"maxLength":40},
     "src_ip":{"type":"string","anyOf":[{"format":"ipv4"},{"format":"ipv6"}]},
     "asset_id":{"type":"string","minLength":1},"outcome":{"enum":["success","failure","denied"]},

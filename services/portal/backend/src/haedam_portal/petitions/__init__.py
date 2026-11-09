@@ -52,6 +52,9 @@ def listing():
 @bp.post("")
 @require("citizen")
 def create():
+    if g.user.posting_restricted:  # H1: 작성만 막고 로그인·조회는 그대로
+        emit("petition.create_refused", "failure", 429, username=g.user.username)
+        fail(429, "POSTING_RESTRICTED", "민원 작성이 일시 제한된 계정입니다. 담당 부서에 문의해 주세요.")
     data = body()
     title = text(data, "title", 5, 120)
     content = text(data, "content", 10, 5000)

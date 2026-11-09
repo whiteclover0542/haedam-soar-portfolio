@@ -77,6 +77,33 @@ def account_lock_by_username():
     return account_action(User.username == username, {"username": username, "action": "lock", "data": data}, "lock", data)
 
 
+@bp.post("/accounts/posting")
+def posting_response():
+    # H1 민원 도배(반소람): 그 계정의 민원 작성만 제한/해제한다. 로그인·조회·세션은 건드리지 않는다.
+    authenticate_response()
+    data = body()
+    username = text(data, "username", 1, 40).lower()
+    restricted = data.get("restricted")
+    if type(restricted) is not bool:
+        fail(400, "VALIDATION_ERROR", "restricted는 true 또는 false여야 합니다.")
+    request_key, fingerprint = request_digests({"username": username, "action": "posting", "restricted": restricted})
+    target = db.session.scalar(select(User).where(User.username == username).with_for_update())
+    if not target:
+        fail(404, "NOT_FOUND", "계정을 찾을 수 없습니다.")
+    previous = replayed(request_key, fingerprint)
+    if previous:
+        return ok(previous)
+    if target.role == "admin":
+        fail(403, "FORBIDDEN", "관리자 계정은 자동 대응 대상에서 제외합니다.")
+    changed = target.posting_restricted != restricted
+    target.posting_restricted = restricted
+    result = {"user_id": target.id, "username": target.username, "posting_restricted": restricted, "changed": changed}
+    db.session.add(ResponseReceipt(request_key=request_key, fingerprint=fingerprint, result=result))
+    db.session.commit()
+    emit("auth.posting_restricted" if restricted else "auth.posting_allowed", "success", 200, username=target.username)
+    return ok(result)
+
+
 def account_action(target_filter, scope, action, data):
     request_key, fingerprint = request_digests(scope)
     # Lock the account before the first consistent read. Concurrent requests for

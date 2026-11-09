@@ -50,6 +50,7 @@
         "role": { "enum": ["citizen", "staff", "admin"] },
         "department": { "type": "string", "maxLength": 40 },
         "locked": { "type": "boolean" },
+        "posting_restricted": { "type": "boolean" },
         "created_at": { "type": "string", "format": "date-time" }
       }
     }

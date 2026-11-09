@@ -59,9 +59,9 @@
 **Interfaces:**
 - Produces: `POST /api/v1/response/accounts/posting` — 본문 `{"username": str, "restricted": bool}`, 헤더 `X-Response-Key`·`Idempotency-Key`. 응답 `ok({"user_id": int, "username": str, "posting_restricted": bool, "changed": bool})`. 오류: 403 관리자/인증 실패, 404 없는 계정, 400 `restricted`가 불리언이 아님.
 - Produces: 제한 계정의 `POST /api/v1/petitions` → 429, 오류 코드 `POSTING_RESTRICTED`, 이벤트 `petition.create_refused`(outcome `failure`, status 429, `username`).
-- Produces: 대응 API 성공 시 이벤트 `account.posting_restricted` 또는 `account.posting_allowed`(status 200, `username`).
+- Produces: 대응 API 성공 시 이벤트 `auth.posting_restricted` 또는 `auth.posting_allowed`(기존 `auth.account_locked`와 같은 규칙)(status 200, `username`).
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다** (`tests/test_posting_restriction.py`, `conftest.py`의 `Actor`·`PASSWORD`·`citizen`/`other`/`admin` 계정 재사용)
+- [x] **Step 1: 실패하는 테스트를 쓴다** (`tests/test_posting_restriction.py`, `conftest.py`의 `Actor`·`PASSWORD`·`citizen`/`other`/`admin` 계정 재사용)
 
 ```python
 def test_restricted_user_gets_429_and_others_are_fine(app):
@@ -99,17 +99,17 @@ def test_refusal_is_logged(app):
     assert last_event(app)["event_type"] == "petition.create_refused"
 ```
 
-- [ ] **Step 2: 실패 확인** — `cd services/portal/backend; python -m pytest tests/test_posting_restriction.py -v` → 8개 FAIL(404 또는 AttributeError)
+- [x] **Step 2: 실패 확인** — `cd services/portal/backend; python -m pytest tests/test_posting_restriction.py -v` → 8개 FAIL(404 또는 AttributeError)
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
   - 마이그레이션 `b1f3c2d4e5a6`(down_revision `7c2e9a41d5b3`): `users.posting_restricted` Boolean, `nullable=False`, `server_default=sa.false()`.
   - `User.posting_restricted = db.Column(db.Boolean, nullable=False, default=False)`, `public()`에 추가.
   - `create()`: 입력 검증 전에 `if g.user.posting_restricted:` → `emit("petition.create_refused", "failure", 429, username=...)` 후 `fail(429, "POSTING_RESTRICTED", "민원 작성이 일시 제한된 계정입니다. 담당 부서에 문의해 주세요.")`.
   - 대응 API `posting_response()`: `account_action`과 같은 순서(인증 → `request_digests` → `with_for_update` 조회 → `replayed` → 관리자 거부 → 변경 → `ResponseReceipt` → commit → 이벤트). 세션은 회수하지 않는다(로그인 유지가 요구사항).
 
-- [ ] **Step 4: 통과 확인** — 같은 명령 8개 PASS, 이어서 `python -m pytest -q`로 기존 포털 테스트도 모두 PASS
+- [x] **Step 4: 통과 확인** — 같은 명령 8개 PASS, 이어서 `python -m pytest -q`로 기존 포털 테스트도 모두 PASS
 
-- [ ] **Step 5: 커밋** — `feat(portal): 민원 작성 제한 플래그와 대응 API(H1)`
+- [x] **Step 5: 커밋** — `feat(portal): 민원 작성 제한 플래그와 대응 API(H1)`
 
 ### Task 2: Graylog — H1 탐지 정의와 알림 (H1-2)
 

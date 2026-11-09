@@ -27,12 +27,13 @@ class User(db.Model):
     role = db.Column(db.String(12), nullable=False, default="citizen")
     department = db.Column(db.String(40), nullable=False, default="")
     locked = db.Column(db.Boolean, nullable=False, default=False)
+    posting_restricted = db.Column(db.Boolean, nullable=False, default=False)  # H1: 민원 작성만 제한
     created_at = db.Column(db.DateTime, nullable=False, default=now)
 
     def public(self):
         return {"id": self.id, "username": self.username, "display_name": self.display_name,
                 "role": self.role, "department": self.department, "locked": self.locked,
-                "created_at": iso(self.created_at)}
+                "posting_restricted": self.posting_restricted, "created_at": iso(self.created_at)}
 
 
 class LoginSession(db.Model):
