@@ -151,7 +151,7 @@ def test_bootstrap_lists_h1():
 - Consumes: Task 1 API, Task 2 알림 본문
 - Produces: 하위 `haedamPortalPosting01` — 입력 `{action: "restrict"|"allow", username, ticket_id, dry_run, ctx}`, 출력은 `haedam-13`과 같은 형태(`ok, result, applied_verified, detail`). 메인 `haedamH1Main01` — 웹훅 `haedam-h1`, `group_key = username`, 조치 기록 `{bot: "113", via: "portal", action: "restrict_posting", target: username}`(111 계정 잠금·112 IP 차단과 구분), seat `A`.
 
-- [ ] **Step 1: 실패하는 테스트** — 기존 `test_all_referenced_credentials_built`·`test_attach_sets_ids_on_every_header_auth_node`가 새 파일까지 덮는다. 추가:
+- [x] **Step 1: 실패하는 테스트** — 기존 `test_all_referenced_credentials_built`·`test_attach_sets_ids_on_every_header_auth_node`가 새 파일까지 덮는다. 추가:
 
 ```python
 def test_h1_workflows_derived():
@@ -163,10 +163,10 @@ def test_h1_workflows_derived():
     assert "/api/v1/response/accounts/posting" in json.dumps(sub)
 ```
 
-- [ ] **Step 2: 실패 확인** — `python -m pytest tests/test_n8n_credentials.py -v`
-- [ ] **Step 3: 구현** `tools/make_h1_workflows.py` — 원본 JSON을 읽어 문자열 치환으로 새 파일을 쓴다. 치환 표는 스크립트 맨 위 상수로 두고(id·이름·웹훅 경로·하위 워크플로 ID·포털 경로·요청 본문 필드·`expected` 조치·`group_key`), 각 치환이 원본에 정확히 1회 이상 있는지 `assert`한다(원본이 바뀌면 조용히 틀린 파일을 만들지 않도록). 생성 결과는 사람이 읽고 커밋한다. 생성기는 다시 돌리지 않는 한 번용이다.
-- [ ] **Step 4: 통과 확인** — `python -m pytest tests -q`
-- [ ] **Step 5: 커밋** — `feat(n8n): H1 메인·작성 제한 워크플로`
+- [x] **Step 2: 실패 확인** — `python -m pytest tests/test_n8n_credentials.py -v`
+- [x] **Step 3: 구현** `tools/make_h1_workflows.py` — 원본 JSON을 읽어 문자열 치환으로 새 파일을 쓴다. 치환 표는 스크립트 맨 위 상수로 두고(id·이름·웹훅 경로·하위 워크플로 ID·포털 경로·요청 본문 필드·`expected` 조치·`group_key`), 각 치환이 원본에 정확히 1회 이상 있는지 `assert`한다(원본이 바뀌면 조용히 틀린 파일을 만들지 않도록). 생성 결과는 사람이 읽고 커밋한다. 생성기는 다시 돌리지 않는 한 번용이다.
+- [x] **Step 4: 통과 확인** — `python -m pytest tests -q`
+- [x] **Step 5: 커밋** — `feat(n8n): H1 메인·작성 제한 워크플로`
 
 ### Task 4: 실행기·집계에 H1 추가, 기준선 모드 (H1-4 준비)
 

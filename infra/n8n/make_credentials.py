@@ -5,11 +5,12 @@ portal/ticket store carry none at all (import used to wipe them). Fixed ids make
 """
 import copy
 
-CALLERS = ["haedam-s1", "haedam-s4", "haedam-s8-s10", "haedam-s12", "haedam-s7", "haedam-s7-live", "haedam-release"]
+CALLERS = ["haedam-s1", "haedam-s4", "haedam-s8-s10", "haedam-s12", "haedam-s7", "haedam-s7-live", "haedam-release", "haedam-h1"]
 # HTTP Request nodes with Header Auth but no reference: which credential they need, by workflow id.
 HTTP_HEADER_AUTH = {"haedamResultLog01": "ticket-store (C)",
                     "haedamPortalIp01": "haedam-portal-response",
-                    "haedamAccountLock01": "haedam-portal-response"}
+                    "haedamAccountLock01": "haedam-portal-response",
+                    "haedamPortalPosting01": "haedam-portal-response"}
 
 
 def _id(name):

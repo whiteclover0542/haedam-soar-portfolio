@@ -39,3 +39,14 @@ def test_attach_sets_ids_on_every_header_auth_node():
                 assert n["credentials"]["httpHeaderAuth"]["id"] in ids, (p.name, n["name"])
             for ref in (n.get("credentials") or {}).values():
                 assert ref["id"] in ids, (p.name, n["name"])
+
+
+def test_h1_workflows_derived():
+    main = load(Path("infra/n8n/workflows/haedam-35-h1-main.json"))
+    sub = load(Path("infra/n8n/workflows/haedam-18-portal-posting.json"))
+    assert main["id"] == "haedamH1Main01" and sub["id"] == "haedamPortalPosting01"
+    text = json.dumps(main, ensure_ascii=False)
+    assert "haedam-h1" in text and "haedamPortalPosting01" in text and "haedamPortalIp01" not in text
+    assert "restrict_posting" in text and "'112'" not in text
+    sub_text = json.dumps(sub, ensure_ascii=False)
+    assert "/api/v1/response/accounts/posting" in sub_text and "restricted: true" in sub_text and "/accounts/lock" not in sub_text
