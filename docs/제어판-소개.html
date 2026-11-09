@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>해담시청 SOAR 실습 제어판</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --line:#2a2f3a; --fg:#e7eaf0; --mut:#9aa3b2;
+    --accent:#5aa2ff; --ok:#49c17a; --wait:#e0a93b; --bad:#e2605a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:16px/1.65 -apple-system,"Segoe UI",system-ui,"Malgun Gothic",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:0 auto;padding:40px 20px 72px}
+  header{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:8px}
+  h1{font-size:28px;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--mut);margin:0;font-size:15px}
+  h2{font-size:20px;margin:40px 0 14px;letter-spacing:-.01em}
+  p{margin:0 0 14px}
+  .mut{color:var(--mut)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:14px 0}
+  /* 6단계 흐름 */
+  ol.flow{list-style:none;margin:0;padding:0;counter-reset:s}
+  ol.flow li{position:relative;padding:14px 0 14px 54px;border-bottom:1px solid var(--line)}
+  ol.flow li:last-child{border-bottom:0}
+  ol.flow li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:14px;
+    width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    background:#1f2531;border:1px solid var(--line);color:var(--accent);font-weight:700}
+  ol.flow b{display:block;font-size:16px}
+  ol.flow .d{color:var(--mut);font-size:14.5px;margin-top:2px}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .dot.ok{background:var(--ok)} .dot.wait{background:var(--wait)} .dot.bad{background:var(--bad)}
+  /* 케이스 */
+  .cases{display:grid;gap:12px;grid-template-columns:1fr}
+  @media(min-width:640px){.cases{grid-template-columns:repeat(3,1fr)}}
+  .cases .card{margin:0}
+  .tag{font-weight:700;color:var(--accent)}
+  .src{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--mut)}
+  /* 캡처 자리 */
+  figure{margin:16px 0}
+  .shot{border:1px dashed var(--line);border-radius:10px;overflow:hidden;background:#12151c}
+  .shot img{display:block;width:100%;height:auto}
+  .shot .ph{aspect-ratio:16/9;display:grid;place-items:center;color:var(--mut);text-align:center;padding:24px;font-size:14px}
+  figcaption{color:var(--mut);font-size:14.5px;margin-top:10px}
+  figcaption b{color:var(--fg)}
+  .step{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#07122a;font-weight:700;font-size:13px;margin-right:6px;vertical-align:-3px}
+  code{font:13.5px ui-monospace,Menlo,Consolas,monospace;background:#1f2531;padding:1px 6px;border-radius:5px}
+  .note{border-left:3px solid var(--accent);padding:12px 16px;background:#141a26;border-radius:0 8px 8px 0;color:var(--mut);font-size:14.5px}
+  footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);color:var(--mut);font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>해담시청 SOAR — 실습 제어판</h1>
+  <p class="sub">공격 한 번 → 탐지 → 자동 차단 → 사람 확인 후 해제까지, 버튼으로 보여 주는 화면. 반소람</p>
+</header>
+
+<p>실제 사이버 공격을 모사해 보내면, Graylog가 탐지하고 n8n이 포털·pfSense에 차단을 넣고, 확인 뒤 사람이 해제합니다. 제어판은 이 과정을 티켓마다 <b>6단계</b>로 보여 주고 5초마다 자동으로 갱신됩니다.</p>
+
+<div class="note">이 문서는 <b>소개용</b>입니다. 흐름과 화면만 봅니다. 직접 버튼을 눌러 보려면 저장소를 받아 스택(컨테이너 14개)을 띄워야 합니다.</div>
+
+<h2>한눈에: 공격 한 번에서 해제까지</h2>
+<p class="mut">아래는 S1(로그인 무차별 대입)을 예로 한 바퀴 돈 화면입니다. 티켓마다 6단계가 한 화면에 모여 있고, 5초마다 자동으로 갱신됩니다.</p>
+
+<figure>
+  <div class="shot">
+    <img src="captures/panel-1-start.png" alt="제어판 시작 화면 — 파란 글씨 링크와 케이스 탭"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+    <div class="ph" style="display:none">여기에 <code>captures/panel-1-start.png</code></div>
+  </div>
+  <figcaption><span class="step">1</span>시작 화면. 위쪽 <b>파란 글씨</b>(Graylog · n8n · 티켓 대시보드 · pfSense · 민원 포털)를 누르면 그 도구가 새 탭으로 <b>열려 직접 확인</b>할 수 있고, <b>S10 · S8 · S1 탭</b>을 누르면 그 케이스 공격을 바로 돌립니다. 아래 6단계가 모두 보입니다.</figcaption>
+</figure>
+
+<figure>
+  <div class="shot">
+    <img src="captures/panel-2-effect.png" alt="공격 뒤 — 단계가 초록으로, 효과 바로 확인"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+    <div class="ph" style="display:none">여기에 <code>captures/panel-2-effect.png</code></div>
+  </div>
+  <figcaption><span class="step">2</span>[공격] 뒤. 단계가 위에서부터 <b>초록</b>으로 바뀌고, <b>⑤ 효과</b>에 공격자 <b>403</b>·정상 시민 <b>200</b>이 곧바로 떠서 막혔는지 <b>한눈에</b> 보입니다. 각 단계의 <b>화면 열기</b>로 Graylog·n8n에서 근거를 보고, 맨 아래 <b>실행한 명령</b>에 실제로 돌아간 명령이 남습니다.</figcaption>
+</figure>
+
+<figure>
+  <div class="shot">
+    <img src="captures/panel-3-done.png" alt="해제까지 — 여섯 단계 모두 완료"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+    <div class="ph" style="display:none">여기에 <code>captures/panel-3-done.png</code></div>
+  </div>
+  <figcaption><span class="step">3</span>효과를 확인한 뒤 <b>⑥ 해제</b>를 누르면 넣었던 차단을 되돌리고 공격자가 다시 <b>200</b>. 한 바퀴 끝. 차단은 <b>공격자 IP에만</b> 걸려, 피해자 계정과 다른 시민은 내내 정상입니다.</figcaption>
+</figure>
+
+<figure>
+  <div class="shot">
+    <img src="captures/panel-4-alert.png" alt="Discord 자동 알림 — 차단과 해제"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+    <div class="ph" style="display:none">여기에 <code>captures/panel-4-alert.png</code></div>
+  </div>
+  <figcaption>차단과 해제는 <b>Discord로도 바로 알림</b>이 갑니다. IP·계정·티켓·상태가 함께 와서 화면을 안 보고 있어도 상황을 압니다.</figcaption>
+</figure>
+
+<footer>
+  해담시청 SOAR 포트폴리오 · 실습 제어판은 <code>python lab/panel.py</code>로 각자 PC에서 실행합니다.
+  직접 해 보는 절차는 저장소의 <code>docs/실습-안내.md</code>에 있습니다.
+</footer>
+</div>
+</body>
+</html>

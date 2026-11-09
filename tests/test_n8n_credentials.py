@@ -58,3 +58,12 @@ def test_discord_is_optional_and_wired_when_set():
     w = attach_credentials(load(Path("infra/n8n/workflows/haedam-11-discord-notify.json")), creds)
     node = next(n for n in w["nodes"] if n["type"] == "n8n-nodes-base.discord")
     assert node["credentials"]["discordWebhookApi"]["id"] in {c["id"] for c in creds}
+
+
+def test_discord_notification_shows_severity_and_response_rates():
+    workflow = json.loads(Path("infra/n8n/workflows/haedam-11-discord-notify.json").read_text(encoding="utf-8"))[0]
+    code = next(node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.code" and node["name"].startswith("Discord"))["parameters"]["jsCode"]
+
+    assert "response_rate" in code
+    assert "recovery_rate" in code
+    assert "Critical" in code
