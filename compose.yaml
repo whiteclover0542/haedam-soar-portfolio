@@ -190,33 +190,91 @@ services:
     container_name: haedam-wazuh-manager
     hostname: wazuh.manager
     profiles: [wazuh]
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 655360, hard: 655360}
     environment:
       INDEXER_URL: https://wazuh.indexer:9200
       INDEXER_USERNAME: admin
-      INDEXER_PASSWORD: SecretPassword
+      INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD:?.env}
+      FILEBEAT_SSL_VERIFICATION_MODE: full
+      SSL_CERTIFICATE_AUTHORITIES: /etc/ssl/wazuh/root-ca-manager.pem
+      SSL_CERTIFICATE: /etc/ssl/wazuh/wazuh.manager.pem
+      SSL_KEY: /etc/ssl/wazuh/wazuh.manager-key.pem
       API_USERNAME: wazuh-wui
-      API_PASSWORD: MyS3cr37P450r.*-
+      API_PASSWORD: ${WAZUH_API_PASSWORD:?.env}
     networks: {lan: {ipv4_address: 10.250.0.4}}
+    volumes:
+      - wazuh-api-configuration:/var/ossec/api/configuration
+      - wazuh-etc:/var/ossec/etc
+      - wazuh-logs:/var/ossec/logs
+      - wazuh-queue:/var/ossec/queue
+      - filebeat-etc:/etc/filebeat
+      - filebeat-var:/var/lib/filebeat
+      - wazuh-certs:/etc/ssl/wazuh:ro
+    mem_limit: 1g
     restart: unless-stopped
+
   wazuh.indexer:
     image: wazuh/wazuh-indexer:4.9.2
     container_name: haedam-wazuh-indexer
     hostname: wazuh.indexer
     profiles: [wazuh]
     environment: {OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g}
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 65536, hard: 65536}
     networks: {lan: {ipv4_address: 10.250.0.6}}
     volumes:
       - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - wazuh-certs:/usr/share/wazuh-indexer/certs:ro   # 인증서: infra/wazuh/generate-certs.yml
       - ./infra/wazuh/config/wazuh_indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
+      - ./infra/wazuh/config/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:ro   # make_users.py
+    mem_limit: 1536m
     restart: unless-stopped
+
   wazuh.dashboard:
     image: wazuh/wazuh-dashboard:4.9.2
     container_name: haedam-wazuh-dashboard
     hostname: wazuh.dashboard
     profiles: [wazuh]
+    environment:
+      OPENSEARCH_HOSTS: https://wazuh.indexer:9200
+      INDEXER_USERNAME: admin
+      INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD:?.env}
+      WAZUH_API_URL: https://wazuh.manager
+      DASHBOARD_USERNAME: kibanaserver
+      DASHBOARD_PASSWORD: ${WAZUH_DASHBOARD_PASSWORD:?.env}
+      API_USERNAME: wazuh-wui
+      API_PASSWORD: ${WAZUH_API_PASSWORD:?.env}
     ports: ["127.0.0.1:5601:5601"]
     networks: {lan: {ipv4_address: 10.250.0.7}}
     volumes:
+      - wazuh-certs:/usr/share/wazuh-dashboard/certs:ro
       - ./infra/wazuh/config/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
     depends_on: [wazuh.indexer, wazuh.manager]
+    mem_limit: 768m
+    restart: unless-stopped
+
+  # ── 실습용 출발지 (wan). attacker는 별칭 .21·.22를 더 갖는다 ──
+  attacker:
+    build: lab
+    image: haedam/lab
+    container_name: haedam-attacker
+    profiles: [lab]
+    cap_add: [NET_ADMIN]
+    command: sh -c "ip addr add 203.0.113.21/24 dev eth0 && ip addr add 203.0.113.22/24 dev eth0 && exec sleep infinity"
+    networks:
+      wan: {ipv4_address: 203.0.113.11}
+    mem_limit: 128m
+    restart: unless-stopped
+
+  normal:
+    build: lab
+    image: haedam/lab
+    container_name: haedam-normal
+    profiles: [lab]
+    networks:
+      wan: {ipv4_address: 203.0.113.100}
+    mem_limit: 128m
     restart: unless-stopped

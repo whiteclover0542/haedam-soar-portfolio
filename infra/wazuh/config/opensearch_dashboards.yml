@@ -1,9 +1,10 @@
 server.host: 0.0.0.0
 server.port: 5601
 opensearch.hosts: ["https://wazuh.indexer:9200"]
-opensearch.username: kibanaserver
-opensearch.password: kibanaserver
-opensearch.ssl.verificationMode: none
+# kibanaserver 계정·비밀번호는 compose의 DASHBOARD_USERNAME/PASSWORD(.env)로 이미지가 keystore에 넣는다.
+opensearch.ssl.verificationMode: certificate
+opensearch.ssl.certificateAuthorities: ["/usr/share/wazuh-dashboard/certs/root-ca.pem"]
 server.ssl.enabled: true
-server.ssl.key: /etc/wazuh-dashboard/certs/dashboard-key.pem
-server.ssl.certificate: /etc/wazuh-dashboard/certs/dashboard.pem
+server.ssl.key: /usr/share/wazuh-dashboard/certs/wazuh.dashboard-key.pem
+server.ssl.certificate: /usr/share/wazuh-dashboard/certs/wazuh.dashboard.pem
+uiSettings.overrides.defaultRoute: /app/wz-home

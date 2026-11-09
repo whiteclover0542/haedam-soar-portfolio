@@ -11,3 +11,5 @@ instance/
 .superpowers/
 infra/pfsense/iso/
 .local/
+infra/wazuh/config/wazuh_indexer_ssl_certs/
+infra/wazuh/config/internal_users.yml
