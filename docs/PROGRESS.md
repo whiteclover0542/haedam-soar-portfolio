@@ -7,7 +7,7 @@
 
 ## 지금 할 일
 
-**Task 1~4 완료.** 다음은 Task 5 Wazuh다(세션 2 작업과 관계없이 Task 순서대로 진행). pfSense 설치 절차와 함정은 [infra/pfsense/INSTALL.md](../infra/pfsense/INSTALL.md)에 있다.
+**Task 1~5 완료.** 다음은 Task 6(최상위 compose 정리·`.env.example`·lab·동시 기동 점검)이다. pfSense 설치 절차와 함정은 [infra/pfsense/INSTALL.md](../infra/pfsense/INSTALL.md)에 있다.
 
 **규칙**
 - 두 세션 모두 `compose.yaml`의 자기 서비스 블록만 추가한다.
@@ -38,7 +38,7 @@
 | 2 | 서버(포털·MySQL·티켓 저장소) | ✅ | 빈 볼륨 기동·재시작 `Serving on`, `normal`→pfSense→`/api/v1/health` 200, 호스트 8080 로그인 화면, events.jsonl `src_ip` 203.0.113.100 |
 | 3 | Graylog + 탐지 설정 자동 반입 | ✅ | bootstrap 생성 8 → 재실행 0, 포털 `source:haedam-portal` 검색, `.22` ping → `rule:pfsense-block` 실시각 검색, 정의 3·알림 2(헤더)·허용 목록 2. 콘텐츠 팩은 생략 |
 | 4 | n8n 워크플로·자격 증명 반입 | ✅ | `load.py`로 자격 증명 9·워크플로 19, 웹훅 키 없음/틀림 403·맞음 `no_action`, haedam-01 티켓 저장소 check `ok:true`, haedam-03→14 pfSense status `ok:true` |
-| 5 | Wazuh single-node | ⬜ | |
+| 5 | Wazuh single-node | ✅ | 세션 2 구현·병합(`f9379a6`, `186c6dd`). 재확인: manager API 토큰 200, 대시보드 302. **Wazuh 기본 비밀번호(`SecretPassword` 등)가 compose에 남아 있음 → 공개 전환(Task 8) 전에 처리** |
 | 6 | 최상위 compose·`.env.example`·동시 기동 점검 | ⬜ | |
 | 7 | 티켓 실행기, S10 → S8 → S1 실측 | ⬜ | |
 | 8 | README·새 설치 리허설·공개 전환 | ⬜ | |
