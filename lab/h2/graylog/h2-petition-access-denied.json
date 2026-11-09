@@ -1,0 +1,32 @@
+{
+  "title": "H2 타인 민원 상세 반복 조회 (username+src_ip)",
+  "description": "H2 초안. 같은 시민 계정과 출발지에서 5분 안 타인 민원 상세 조회 거부가 3건 이상 발생한 경우.",
+  "priority": 2,
+  "alert": true,
+  "config": {
+    "type": "aggregation-v1",
+    "query": "source:haedam-portal AND event_type:\"petition.access_denied\" AND status:403",
+    "query_parameters": [],
+    "filters": [],
+    "streams": ["REPLACE_haedam-portal_stream_id"],
+    "stream_categories": [],
+    "group_by": ["username", "src_ip"],
+    "series": [{"type": "count", "id": "count()", "field": null}],
+    "conditions": {"expression": {"expr": ">", "left": {"expr": "number-ref", "ref": "count()"}, "right": {"expr": "number", "value": 2}}},
+    "search_within_ms": 300000,
+    "execute_every_ms": 60000,
+    "use_cron_scheduling": false,
+    "cron_expression": null,
+    "cron_timezone": null,
+    "event_limit": 100
+  },
+  "field_spec": {
+    "username": {"data_type": "string", "providers": [{"type": "template-v1", "template": "${source.username}", "require_values": true}]},
+    "src_ip": {"data_type": "string", "providers": [{"type": "template-v1", "template": "${source.src_ip}", "require_values": true}]},
+    "case_id": {"data_type": "string", "providers": [{"type": "template-v1", "template": "H2", "require_values": true}]}
+  },
+  "key_spec": ["username", "src_ip"],
+  "notification_settings": {"grace_period_ms": 300000, "backlog_size": 20},
+  "notifications": [],
+  "storage": [{"type": "persist-to-streams-v1", "streams": ["000000000000000000000002"]}]
+}

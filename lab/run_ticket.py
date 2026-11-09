@@ -11,6 +11,7 @@ import secrets
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -105,9 +106,30 @@ def portal_login(container, src, *args, pw=None):
 
 
 def last_run(case):
+    """Newest real attack input time; baseline runs use the normal source, so they don't consume the attack window."""
     f = ROOT / f"docs/tickets/{case}/runs.jsonl"
     lines = f.read_text("utf-8").splitlines() if f.exists() else []
-    return ts(json.loads(lines[-1])["input_at"]) if lines else None
+    for line in reversed(lines):
+        r = json.loads(line)
+        if not r.get("baseline"):
+            return ts(r["input_at"])
+    return None
+
+
+def unauth_release_code(case):
+    """A release attempt WITHOUT the key must be rejected — authorization stays enforced after the incident."""
+    if case == "H1":
+        js = ("fetch('http://10.250.0.2:5000/api/v1/response/accounts/posting',{method:'POST',headers:{'Content-Type':"
+              "'application/json'},body:JSON.stringify({username:'zz',restricted:false})}).then(r=>console.log(r.status))")
+        return sh("docker", "exec", "haedam-n8n", "node", "-e", js)
+    body = json.dumps({"seat": SEAT[case], "case_id": case, "group_key": "zz", "approver": "noauth", "dry_run": True}).encode()
+    req = urllib.request.Request("http://127.0.0.1:5678/webhook/haedam-release", data=body, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return str(r.status)
+    except urllib.error.HTTPError as ex:
+        return str(ex.code)
 
 
 def tickets_for(group_key):
@@ -136,15 +158,23 @@ def main():
     case, src, e = a.case, SRC[a.case], env()
     now = datetime.now(timezone.utc)
     left = window_blocked(last_run(case), now, WINDOW_MIN[case])
-    if left:
+    if left and not a.baseline:
         raise SystemExit(f"{case}: same-source window still open, wait {left}s")
     problems = precheck(portal_blocked(e), pf_table() if case == "S10" else [], src)
     if problems:
         raise SystemExit("precheck: " + ", ".join(problems))
 
     run = {"case": case, "src": src, "run_id": now.strftime("%m%d%H%M%S")}
-    before = set(tickets_for(src if case not in ("S1", "H1") else "__none__"))  # S1/H1 use a fresh username each run
-    if case == "H1":
+    if a.baseline and case != "H1":
+        # Normal citizen from the normal source: 3 wrong passwords then a success — below every S1/S8/S10 threshold.
+        user, pw = f"zz_base_{case.lower()}_{run['run_id']}", secrets.token_urlsafe(12)
+        run["src"], run["baseline"] = NORMAL, True
+        run["register"] = portal_login("haedam-normal", NORMAL, "register", user, pw=pw)["statuses"]
+        run["input_at"] = datetime.now(timezone.utc).isoformat()
+        run["input"] = portal_login("haedam-normal", NORMAL, "fail", user, "3")["statuses"]
+        run["input"].append(portal_login("haedam-normal", NORMAL, "login", user, pw=pw)["statuses"][0])
+        group_key = user if case == "S1" else NORMAL  # S1 keys on username+src_ip; S8/S10 on src_ip
+    elif case == "H1":
         user, pw = f"zz_a_h1_{run['run_id']}", secrets.token_urlsafe(12)
         who, at = ("haedam-normal", NORMAL) if a.baseline else ("haedam-attacker", src)
         run["src"], run["baseline"] = at, a.baseline or None
@@ -172,13 +202,15 @@ def main():
            "--run-id", run["run_id"], "--out", f"/tmp/{run['run_id']}.json", "--execute")
         run["input"] = [x["status"] for x in json.loads(sh("docker", "exec", "haedam-attacker", "cat", f"/tmp/{run['run_id']}.json"))["http"]]
         group_key = src
+    before = set(tickets_for(group_key))  # tickets already present for this key, so we only count ones our input creates
     print("input", run["input"], flush=True)
 
-    ticket = find_ticket(case, group_key, before)
+    # Baseline waits for any new ticket (no S10 pfSense requirement); a real run keeps the case-specific wait.
+    ticket = find_ticket("S1" if a.baseline else case, group_key, before, timeout=150 if a.baseline else 180)
     if a.baseline:  # pass = no ticket for a normal pace (false positive otherwise)
         run.update(ticket_id=ticket["ticket_id"] if ticket else None, result="fail" if ticket else "pass",
                    reason="false positive: ticket for normal pace" if ticket else None)
-        if ticket:
+        if ticket and case == "H1":
             portal_posting(e, group_key, False)  # do not leave the citizen restricted
     elif not ticket:
         run.update(result="fail", reason="no ticket within 180s")
@@ -205,7 +237,9 @@ def main():
         if a.restore and case == "H1":
             run["restore"] = {"verdict": "released_by_person", "steps": [(1, portal_posting(e, group_key, False))],
                               "attacker_after": str(portal_login("haedam-attacker", src, "post", group_key, "1", pw=pw)["statuses"][0]),
-                              "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"]}
+                              "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"],
+                              "unauth_release": unauth_release_code(case)}
+            run["restore"]["permission_enforced"] = run["restore"]["unauth_release"] in ("401", "403")
         elif a.restore:
             body = json.dumps({"seat": SEAT[case], "case_id": ticket["case_id"], "group_key": group_key, "approver": "run_ticket",
                                "dry_run": False, "reason": "lab run restore"}).encode()
@@ -216,13 +250,15 @@ def main():
             rel = rel[0] if isinstance(rel, list) else rel
             run["restore"] = {"verdict": rel.get("verdict"), "steps": [(s.get("step"), s.get("result")) for s in rel.get("steps") or []],
                               "attacker_after": http_code("haedam-attacker", src),
-                              "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"]}
+                              "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"],
+                              "unauth_release": unauth_release_code(case)}
+            run["restore"]["permission_enforced"] = run["restore"]["unauth_release"] in ("401", "403")
         refused, fine = (("429",), "201") if case == "H1" else (("403", "000"), "200")
         ok = bool(blocked) and run["effect"]["attacker"] in refused and run["effect"]["normal"] == fine
         if case == "S10":  # the point of S10 is the perimeter block; a portal-only 403 is not a pass
             ok = ok and any(x[0] == "pfsense" for x in blocked) and run["effect"]["attacker"] == "000"
         if a.restore:
-            ok = ok and run["restore"]["attacker_after"] == fine
+            ok = ok and run["restore"]["attacker_after"] == fine and run["restore"].get("permission_enforced")
         run["result"] = "pass" if ok else "fail"
     out = ROOT / f"docs/tickets/{case}/runs.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)

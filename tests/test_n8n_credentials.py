@@ -60,10 +60,12 @@ def test_discord_is_optional_and_wired_when_set():
     assert node["credentials"]["discordWebhookApi"]["id"] in {c["id"] for c in creds}
 
 
-def test_discord_notification_shows_severity_and_response_rates():
+def test_discord_notification_shows_risk_score_and_dashboard_link():
     workflow = json.loads(Path("infra/n8n/workflows/haedam-11-discord-notify.json").read_text(encoding="utf-8"))[0]
     code = next(node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.code" and node["name"].startswith("Discord"))["parameters"]["jsCode"]
 
-    assert "response_rate" in code
-    assert "recovery_rate" in code
-    assert "Critical" in code
+    assert "risk_score" in code
+    assert "위험도:" in code
+    assert "dashboard_url" in code
+    assert "보안 대시보드 열기" in code
+    assert "심각" in code

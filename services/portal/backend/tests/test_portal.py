@@ -23,7 +23,8 @@ def test_complete_workflow_and_private_data(actors):
     citizen, staff = actors["citizen"], actors["staff"]
     data = create(citizen)
     pid = data["id"]
-    assert actors["other"].call("GET", f"/petitions/{pid}").status_code == 404
+    denied = actors["other"].call("GET", f"/petitions/{pid}")
+    assert denied.status_code == 403
     assert actors["other"].call("GET", "/petitions?q=가로등").json["data"]["total"] == 0
     assert actors["admin"].call("GET", f"/petitions/{pid}").status_code == 403
     assert staff.call("PATCH", f"/petitions/{pid}/status", {"status":"in_progress","version":1}).status_code == 403
@@ -35,6 +36,19 @@ def test_complete_workflow_and_private_data(actors):
     final = citizen.call("GET", f"/petitions/{pid}").json["data"]
     assert final["status"] == "completed" and final["reply"] == reply
     assert len(final["history"]) == 4
+
+
+def test_other_citizen_detail_denial_is_logged_for_h2(app, actors):
+    petition = create(actors["citizen"])
+
+    assert actors["other"].call("GET", f"/petitions/{petition['id']}").status_code == 403
+
+    events = [json.loads(line) for line in Path(app.config["EVENT_LOG_PATH"]).read_text(encoding="utf-8").splitlines()]
+    denied = [event for event in events if event["event_type"] == "petition.access_denied"]
+    assert len(denied) == 1
+    assert denied[0]["outcome"] == "failure"
+    assert denied[0]["username"] == "other"
+    assert denied[0]["details"]["status"] == 403
 
 
 def test_stale_version_and_invalid_transition(actors):

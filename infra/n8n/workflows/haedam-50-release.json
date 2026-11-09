@@ -454,6 +454,117 @@
      },
      "options": {}
     }
+   },
+   {
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": true,
+       "leftValue": "",
+       "typeValidation": "strict",
+       "version": 2
+      },
+      "conditions": [
+       {
+        "id": "d7e975bb-e9fd-411c-baaa-752d99250b83",
+        "leftValue": "={{ ($json.actions || []).some(a => a.action === 'restrict_posting') === true }}",
+        "rightValue": "",
+        "operator": {
+         "type": "boolean",
+         "operation": "true",
+         "singleValue": true
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    },
+    "id": "a04ece2c-291d-47b9-905c-ad2b12595c8c",
+    "name": "posting 티켓?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2.2,
+    "position": [
+     760,
+     300
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const j = $input.first().json, x = j.ctx;\nif (j.ok !== true || j.exists !== true) return [{ json: { ok:false, stop:true, no_action:true, verdict:'no_open_ticket', ctx:x } }];\nconst act = (j.actions||[]).find(a => a.action==='restrict_posting' && a.via==='portal');\nconst username = act ? act.target : x.group_key;\nreturn [{ json: { ctx: { ...x, ticket_id:j.ticket_id, ip:username, username, results:[], manual_required:[] },\n  ticket_id:j.ticket_id, dry_run:x.cfg.dry_run, action:'release', username } }];\n"
+    },
+    "id": "c77e806e-3838-4eab-beb4-4e6dd9fe36c0",
+    "name": "posting 해제 입력",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     960,
+     300
+    ]
+   },
+   {
+    "parameters": {
+     "source": "database",
+     "workflowId": {
+      "__rl": true,
+      "value": "haedamPortalPosting01",
+      "mode": "id"
+     },
+     "options": {}
+    },
+    "id": "278daed7-46f3-49d7-b573-e7096639a536",
+    "name": "posting 해제 (haedam-18)",
+    "type": "n8n-nodes-base.executeWorkflow",
+    "typeVersion": 1.2,
+    "position": [
+     1160,
+     300
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const r = $input.first().json; const x = r.ctx;\nif (r.ok !== true) throw new Error('POSTING_RELEASE_FAILED:'+(r.result||'')+':'+(r.detail||''));\nconst now = new Date().toISOString();\nconst res = { step:1, result: x.cfg.dry_run ? 'dry_run' : 'released', detail: r.detail };\nconst base = { ctx:{...x, results:[...(x.results||[]), res]}, mode:'record', seat:x.seat, case_id:x.case_id,\n  group_key:x.group_key, title:x.title||x.case_id, asset_id:x.asset_id, src_ip:x.src_ip||null, username:x.username };\nif (x.cfg.dry_run) return [{ json: { ...base, stage:'detected', event_ids:[`release-dry-${$execution.id}-posting`], idempotency_key:`${$execution.id}-dry-posting` } }];\nreturn [{ json: { ...base, stage:'released', event_ids:[`release-${$execution.id}-posting`], idempotency_key:`${$execution.id}-released-posting`,\n  action:{ bot:'115', target:x.username, via:'portal', action:'restrict_posting', result:'released', applied_verified:null, effect_verified:null, effect_verified_at:null,\n    requested_at:r.requested_at||now, finished_at:r.finished_at||now, n8n_execution_id:String($execution.id), detail:`승인 ${x.approver}${r.result==='already_applied'?' (이미 해제됨)':''}`.slice(0,300) } } }];\n"
+    },
+    "id": "b11327f4-748f-4a9a-b7c7-37915d781314",
+    "name": "posting 기록 입력",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1360,
+     300
+    ]
+   },
+   {
+    "parameters": {
+     "source": "database",
+     "workflowId": {
+      "__rl": true,
+      "value": "haedamResultLog01",
+      "mode": "id"
+     },
+     "options": {}
+    },
+    "id": "586a5486-3f41-48de-aaf6-842f952f1d7e",
+    "name": "posting 기록 (haedam-10 released)",
+    "type": "n8n-nodes-base.executeWorkflow",
+    "typeVersion": 1.2,
+    "position": [
+     1560,
+     300
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "if ($input.first().json.ok !== true) throw new Error('RELEASE_RECORD_REQUIRED');\nconst r = $input.first().json; const x = r.ctx;\nconst failed = (x.results||[]).some(s => !['released','dry_run'].includes(s.result));\nreturn [{ json: { ctx:{...x, ticket:{ticket_id:r.ticket_id, status:r.status}}, level: failed?'error':'info',\n  case_id:x.case_id, title: failed?'원복 중단(해제 실패)':'원복 완료', src_ip:x.username, ticket_id:r.ticket_id,\n  result:(x.results||[]).map(s=>s.result).join(', '), detail:`승인 ${x.approver}` } }];\n"
+    },
+    "id": "b5e0c341-4b7c-41ae-bf5e-00c479e34d77",
+    "name": "posting 알림 입력",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1760,
+     300
+    ]
    }
   ],
   "connections": {
@@ -501,7 +612,7 @@
     "main": [
      [
       {
-       "node": "해제 대상 고르기",
+       "node": "posting 티켓?",
        "type": "main",
        "index": 0
       }
@@ -721,6 +832,79 @@
      [
       {
        "node": "보류 아님?",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "posting 티켓?": {
+    "main": [
+     [
+      {
+       "node": "posting 해제 입력",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "해제 대상 고르기",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "posting 해제 입력": {
+    "main": [
+     [
+      {
+       "node": "posting 해제 (haedam-18)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "posting 해제 (haedam-18)": {
+    "main": [
+     [
+      {
+       "node": "posting 기록 입력",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "posting 기록 입력": {
+    "main": [
+     [
+      {
+       "node": "posting 기록 (haedam-10 released)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "posting 기록 (haedam-10 released)": {
+    "main": [
+     [
+      {
+       "node": "posting 알림 입력",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "posting 알림 입력": {
+    "main": [
+     [
+      {
+       "node": "Discord 알림 (haedam-11)",
        "type": "main",
        "index": 0
       }

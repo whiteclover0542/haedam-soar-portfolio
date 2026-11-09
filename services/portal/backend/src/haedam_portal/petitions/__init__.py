@@ -73,6 +73,11 @@ def create():
 @bp.get("/<int:petition_id>")
 @require("citizen", "staff")
 def detail(petition_id):
+    if g.user.role == "citizen":
+        existing = db.session.get(Petition, petition_id)
+        if existing is not None and existing.applicant_id != g.user.id:
+            emit("petition.access_denied", "failure", 403, username=g.user.username)
+            fail(403, "FORBIDDEN", "다른 시민의 민원 상세는 조회할 수 없습니다.")
     return ok(get_petition(petition_id).public(True))
 
 
