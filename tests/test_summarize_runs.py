@@ -4,8 +4,8 @@ OK_EFFECT = {"attacker": "403", "normal": "200"}
 
 
 def row(case="S8", applied=True, mttd=1.0, normal="200", restored="200", **extra):
-    r = {"case": case, "run_id": "x", "input_at": "2026-11-09T03:00:00+00:00", "mttd_s": mttd, "detect_to_block_s": 0.5,
-         "actions": [["portal", "block", "applied" if applied else "failed", "2026-11-09T03:00:40+00:00"]],
+    r = {"case": case, "run_id": "x", "input_at": "2026-11-09T08:00:00+00:00", "mttd_s": mttd, "detect_to_block_s": 0.5,
+         "actions": [["portal", "block", "applied" if applied else "failed", "2026-11-09T08:00:40+00:00"]],
          "effect": {"attacker": "403", "normal": normal}, "restore": {"attacker_after": restored}}
     r.update(extra)
     return r
@@ -24,7 +24,7 @@ def test_median_ignores_failed():
 def test_s10_needs_pfsense_block():
     portal_only = row(case="S10", effect={"attacker": "000", "normal": "200"})
     both = row(case="S10", effect={"attacker": "000", "normal": "200"})
-    both["actions"].append(["pfsense", "block", "applied", "2026-11-09T03:00:41+00:00"])
+    both["actions"].append(["pfsense", "block", "applied", "2026-11-09T08:00:41+00:00"])
     assert summarize([portal_only, both])["S10"]["auto_rate"] == 1 / 2
 
 
@@ -39,7 +39,7 @@ def test_normal_impact_and_restore():
 
 
 def test_h1_auto_ok_expects_429():
-    r = row(case="H1", actions=[["portal", "restrict_posting", "applied", "2026-11-09T03:00:40+00:00"]],
+    r = row(case="H1", actions=[["portal", "restrict_posting", "applied", "2026-11-09T08:00:40+00:00"]],
             effect={"attacker": "429", "normal": "201"})
     assert summarize([r])["H1"]["auto_rate"] == 1.0
 
@@ -49,13 +49,14 @@ def test_baseline_rows_count_false_positives_only():
     assert s["H1"]["runs"] == 1 and s["H1"]["false_positives"] == 1 and s["H1"]["baseline_runs"] == 2
 
 
-def test_fixed_drops_only_s10_runs_before_fix():
+def test_main_table_is_after_fix_and_failed_runs_go_below():
     early = "2026-11-09T03:30:00+00:00"
     s = summarize([row(case="S10", input_at=early, applied=False), row(input_at=early), row(case="S10", input_at="2026-11-09T04:00:00Z")])
-    assert s["total"]["runs"] == 3 and s["fixed"]["runs"] == 2
+    assert s["total"]["runs"] == 2 and s["S10"]["runs"] == 1
+    assert s["before"]["S10"]["runs"] == 1 and s["before"]["total"]["runs"] == 1
 
 
-def test_h1_restore_means_posting_works_again_and_early_runs_are_not_fixed():
+def test_h1_restore_means_posting_works_again_and_early_runs_go_below():
     early, late = "2026-11-09T06:40:00+00:00", "2026-11-09T07:00:00+00:00"
     s = summarize([row(case="H1", input_at=early, restored=None), row(case="H1", input_at=late, restored="201")])
-    assert s["H1"]["restore_ok"] == 1 and s["fixed"]["runs"] == 1
+    assert s["H1"]["restore_ok"] == 1 and s["H1"]["runs"] == 1 and s["before"]["H1"]["runs"] == 1

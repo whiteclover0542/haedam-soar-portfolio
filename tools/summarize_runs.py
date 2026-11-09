@@ -16,7 +16,7 @@ RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting")
 # What the attacker / the normal user should get while the response is in force.
 REFUSED = {"H1": ("429",)}
 NORMAL_OK = {"H1": "201"}
-# Runs from before a fix are left out of the "fixed" row. S10: pfSense read-after-apply and release verdict.
+# Runs from before a fix are left out of the main table and counted separately below it. S10: pfSense read-after-apply and release verdict.
 # H1: the ticket store rejected case_id H1. See journal 2026-11-09.
 FIXED_AT = {"S10": "2026-11-09T03:46:00+00:00", "H1": "2026-11-09T06:56:00+00:00"}
 
@@ -71,10 +71,20 @@ def _stats(all_rows):
             "input_to_block_median": _median(input_to_block(r) for r in rows if auto_ok(r))}
 
 
-def summarize(rows):
-    out = {c: _stats([r for r in rows if r["case"] == c]) for c in sorted({r["case"] for r in rows})}
+def after_fix(r):
+    return r["case"] not in FIXED_AT or _ts(r["input_at"]) >= _ts(FIXED_AT[r["case"]])
+
+
+def _by_case(rows):
+    out = {c: _stats([r for r in rows if r["case"] == c]) for c in CASES if any(r["case"] == c for r in rows)}
     out["total"] = _stats(rows)
-    out["fixed"] = _stats([r for r in rows if r["case"] not in FIXED_AT or _ts(r["input_at"]) >= _ts(FIXED_AT[r["case"]])])
+    return out
+
+
+def summarize(rows):
+    """Main table: runs after each fix. "before": the runs from before a fix, counted on their own."""
+    out = _by_case([r for r in rows if after_fix(r)])
+    out["before"] = _by_case([r for r in rows if not after_fix(r)])
     return out
 
 
@@ -94,18 +104,23 @@ def run_table(rows):
     return "\n".join(lines)
 
 
-LABEL = {"total": "전체", "fixed": "수정 후(S10 1·2회차, H1 1~3회차 제외)"}
+LABEL = {"total": "전체"}
+
+
+def _rows(s, cols):
+    return [f"| {LABEL.get(k, k)} | " + " | ".join(c(s[k]) for c in cols) + " |" for k in [c for c in CASES if c in s] + ["total"]]
 
 
 def summary_table(s):
+    main = [lambda v: str(v["runs"]), lambda v: f"{v['auto_ok']}/{v['runs']}", lambda v: f"{v['restore_ok']}/{v['restore_tried']}",
+            lambda v: f"{v['normal_fail_runs']}회", lambda v: f"{v['false_positives']}/{v['baseline_runs']}",
+            lambda v: _fmt(v["mttd_median"], "초"), lambda v: _fmt(v["detect_to_block_median"], "초"),
+            lambda v: _fmt(v["input_to_block_median"], "초")]
     lines = ["| 티켓 | 회차 | 자동 대응 | 원복 | 정상 사용자 영향 | 오탐(기준선) | MTTD 중앙값 | 탐지→차단 중앙값 | 입력→차단 중앙값 |",
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
-    for k in [c for c in CASES if c in s] + ["total", "fixed"]:
-        v = s[k]
-        lines.append(f"| {LABEL.get(k, k)} | {v['runs']} | {v['auto_ok']}/{v['runs']} | "
-                     f"{v['restore_ok']}/{v['restore_tried']} | {v['normal_fail_runs']}회 | "
-                     f"{v['false_positives']}/{v['baseline_runs']} | {_fmt(v['mttd_median'], '초')} | "
-                     f"{_fmt(v['detect_to_block_median'], '초')} | {_fmt(v['input_to_block_median'], '초')} |")
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"] + _rows(s, main)
+    if s["before"]["total"]["runs"]:
+        lines += ["", "수정 전 실패 회차(위 표에 넣지 않음. 원인과 수정은 아래 해석)", "",
+                  "| 티켓 | 회차 | 자동 대응 | 원복 | 정상 사용자 영향 |", "| --- | --- | --- | --- | --- |"] + _rows(s["before"], main[:4])
     return "\n".join(lines)
 
 
