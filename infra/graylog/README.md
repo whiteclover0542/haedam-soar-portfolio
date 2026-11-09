@@ -1,5 +1,7 @@
 # 팀용 Graylog (D PC)
 
+> **이 포트폴리오에서는:** 최상위 `compose.yaml`의 `soc` 프로필(mongodb·opensearch·graylog)로 띄우고 `python infra/graylog/bootstrap.py`로 입력·스트림·파이프라인·알림·이벤트 정의를 반입한다. pfSense Syslog는 lan에서 UDP 1514로 직접 받는다. 아래는 팀 4대 환경 당시의 원문이다.
+
 D(chacha1650a)가 관제 PC에서 돌리는 Graylog입니다. 포털 GELF(A), pfSense Syslog(B), Wazuh 경보(C)를 받는 입구와 스트림만 둡니다.
 작업 기준은 [Graylog 셋팅 작업지시](../../team_docs/2026-10-20%20Graylog%20셋팅%20작업지시.md)(초기 설치안), C의 Wazuh 인수인계(10/22), B의 D 인수인계(10/22)입니다. B 인수인계에 따라 작업지시의 과거 상태·수치는 오늘 상태로 복사하지 않고, 수업 볼륨은 보존하고 포트 충돌을 확인했습니다. **상태(10/23): 입력 5개·스트림 2개·파이프라인이 있고, 10/22에 실제 포털(A)·Wazuh(C)·pfSense(B) 로그가 팀 VPN을 거쳐 도착하는 것을 확인했습니다. 10/23 재부팅 뒤 다시 기동했고 입력 5개가 RUNNING, 스트림 규칙은 그대로입니다(재부팅 뒤 포털·Wazuh 새 로그는 아직 확인하지 않았습니다). content pack 내보내기는 아직 하지 않았습니다.**
 

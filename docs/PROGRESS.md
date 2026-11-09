@@ -7,7 +7,7 @@
 
 ## 지금 할 일
 
-**Task 1·2·3 완료.** 다음은 Task 4 n8n이다(세션 2 작업과 관계없이 Task 순서대로 진행). pfSense 설치 절차와 함정은 [infra/pfsense/INSTALL.md](../infra/pfsense/INSTALL.md)에 있다.
+**Task 1~4 완료.** 다음은 Task 5 Wazuh다(세션 2 작업과 관계없이 Task 순서대로 진행). pfSense 설치 절차와 함정은 [infra/pfsense/INSTALL.md](../infra/pfsense/INSTALL.md)에 있다.
 
 **규칙**
 - 두 세션 모두 `compose.yaml`의 자기 서비스 블록만 추가한다.
@@ -37,7 +37,7 @@
 | 1 | pfSense 컨테이너(QEMU/KVM) | ✅ | 포트 포워드 200, 출발지 `203.0.113.100` 보존, `.22` 차단 filterlog 원격 syslog 전송, 전용 키 `status` ok·임의 명령/`.104` 거부, `secret_scan` 0건 |
 | 2 | 서버(포털·MySQL·티켓 저장소) | ✅ | 빈 볼륨 기동·재시작 `Serving on`, `normal`→pfSense→`/api/v1/health` 200, 호스트 8080 로그인 화면, events.jsonl `src_ip` 203.0.113.100 |
 | 3 | Graylog + 탐지 설정 자동 반입 | ✅ | bootstrap 생성 8 → 재실행 0, 포털 `source:haedam-portal` 검색, `.22` ping → `rule:pfsense-block` 실시각 검색, 정의 3·알림 2(헤더)·허용 목록 2. 콘텐츠 팩은 생략 |
-| 4 | n8n 워크플로·자격 증명 반입 | ⬜ | |
+| 4 | n8n 워크플로·자격 증명 반입 | ✅ | `load.py`로 자격 증명 9·워크플로 19, 웹훅 키 없음/틀림 403·맞음 `no_action`, haedam-01 티켓 저장소 check `ok:true`, haedam-03→14 pfSense status `ok:true` |
 | 5 | Wazuh single-node | ⬜ | |
 | 6 | 최상위 compose·`.env.example`·동시 기동 점검 | ⬜ | |
 | 7 | 티켓 실행기, S10 → S8 → S1 실측 | ⬜ | |
@@ -165,6 +165,8 @@ MVP가 끝난 뒤 단계마다 구현 계획을 따로 쓴다. 아래 세부 작
 | 11/09 | 포털은 `pip install -e .`, 서비스별 compose 대신 최상위 compose | 앱이 소스 기준 경로로 migrations·instance를 찾음. 네트워크 정의를 한 곳에 둠 |
 | 11/09 | pfSense 원격 syslog 514 → 1514, Graylog Syslog 입력 시간대 `Asia/Seoul` | Graylog 컨테이너는 1514에서 받음. BSD syslog에 시간대가 없어 UTC로 해석되면 9시간 미래로 저장됨 |
 | 11/09 | Graylog 알림에 `X-Haedam-Key` 헤더, 콘텐츠 팩 생략 | n8n 웹훅이 Header Auth. 팩으로 내보내면 키가 파일에 남음 |
+| 11/09 | n8n 반입은 `load.py`(계획의 import.ps1 대신), 자격 증명에 고정 ID를 주고 노드에 미리 연결 | 반입 때 연결이 지워지던 팀 문제를 없앰. Python이라 테스트 가능 |
+| 11/09 | n8n 하위 워크플로도 게시, pfSense 확인용 haedam-03 추가 | n8n 2.x는 미게시 하위 워크플로 실행을 거부. haedam-14는 직접 입력을 줄 방법이 없음 |
 | 11/09 | 컨테이너 이름에 `haedam-` 접두사 | 다른 프로젝트의 pfSense·Docker와 충돌 방지 |
 
 ## 환경 상태 (학원 PC)

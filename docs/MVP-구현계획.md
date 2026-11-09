@@ -222,18 +222,18 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 - `import.ps1`: `docker exec n8n n8n import:workflow --separate --input=/workflows` → 자격 증명 반입 → `n8n update:workflow --all --active=false` → S1·S8/S10 주 워크플로와 하위 워크플로 활성화
 - 실제 조치 스위치(`dry_run:false`, `store_real:true`)는 팀 문서 `docs/S8S10-COMPLETION.md`·S1 카드의 방식을 따른다. 스위치를 켜는 방법은 README에 적는다.
 
-- [ ] **1단계:** `haedam-10/11/12/14` JSON에서 credentials 참조 이름을 모두 뽑아 위 목록을 확정하고 테스트에 넣는다.
-- [ ] **2단계:** 실패하는 테스트를 쓴다.
+- [x] **1단계:** `haedam-10/11/12/14` JSON에서 credentials 참조 이름을 모두 뽑아 위 목록을 확정하고 테스트에 넣는다.
+- [x] **2단계:** 실패하는 테스트를 쓴다.
   - `test_all_referenced_credentials_built`: 모든 워크플로의 참조 이름 집합 ⊆ `build_credentials(...)`의 이름 집합
   - `test_missing_env_raises`: `PORTAL_RESPONSE_KEY`가 없으면 `KeyError` 메시지에 변수 이름이 들어감
-- [ ] **3단계:** `python -m pytest tests/test_n8n_credentials.py -v` → FAIL
-- [ ] **4단계:** `make_credentials.py`를 구현한다.
-- [ ] **5단계:** 같은 명령으로 PASS를 확인한다.
-- [ ] **6단계:** 실제 반입 후 다음을 확인한다.
+- [x] **3단계:** `python -m pytest tests/test_n8n_credentials.py -v` → FAIL
+- [x] **4단계:** `make_credentials.py`를 구현한다.
+- [x] **5단계:** 같은 명령으로 PASS를 확인한다.
+- [x] **6단계:** 실제 반입 후 다음을 확인한다.
   - n8n 화면에서 각 노드의 자격 증명 연결을 확인한다. 반입 뒤 연결이 지워지는 문제(팀 f5a4b6a)가 생기면 재연결 절차를 README에 적는다.
   - `haedam-14`를 `status`로 수동 실행 → pfSense 응답 OK
   - `haedam-01` → 티켓 저장소 check 200
-- [ ] **7단계:** 커밋한다. `feat(n8n): 단일 PC 반입 스크립트, .env 기반 자격 증명 생성`
+- [x] **7단계:** 커밋한다. `feat(n8n): 단일 PC 반입 스크립트, .env 기반 자격 증명 생성`
 
 ### Task 5: Wazuh single-node
 

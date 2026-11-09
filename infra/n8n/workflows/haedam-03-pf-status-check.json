@@ -1,0 +1,20 @@
+{
+  "id": "haedamPfStatusCheck01",
+  "name": "haedam-03 pfSense 연결 확인 (읽기 전용, status)",
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "nodes": [
+    {"id": "b1a0c3f0-0000-4000-8000-000000000001", "name": "수동 실행", "type": "n8n-nodes-base.manualTrigger",
+     "typeVersion": 1, "position": [0, 0], "parameters": {}},
+    {"id": "b1a0c3f0-0000-4000-8000-000000000002", "name": "status 요청", "type": "n8n-nodes-base.code",
+     "typeVersion": 2, "position": [220, 0],
+     "parameters": {"jsCode": "// pfSense 전용 키·forced command·도구 연결 확인. status는 차단·해제를 하지 않는다.\nreturn [{ json: { action: 'status', ip: '203.0.113.22', dry_run: false, ctx: { purpose: 'connectivity_check' } } }];\n"}},
+    {"id": "b1a0c3f0-0000-4000-8000-000000000003", "name": "haedam-14 (pfSense status)", "type": "n8n-nodes-base.executeWorkflow",
+     "typeVersion": 1.2, "position": [440, 0],
+     "parameters": {"source": "database", "workflowId": {"__rl": true, "value": "haedamPfsense01", "mode": "id"}, "options": {}}}
+  ],
+  "connections": {
+    "수동 실행": {"main": [[{"node": "status 요청", "type": "main", "index": 0}]]},
+    "status 요청": {"main": [[{"node": "haedam-14 (pfSense status)", "type": "main", "index": 0}]]}
+  }
+}
