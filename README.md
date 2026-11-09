@@ -122,6 +122,10 @@ OK   ticket-store  200 {"ok":true,...}
 
 ## 티켓 실측
 
+**직접 한 단계씩:** [docs/실습-안내.md](docs/실습-안내.md) — 공격 명령, Graylog·n8n·티켓 대시보드·pfSense에서 볼 것, 해제까지.
+
+**반복 측정(자동):**
+
 ```powershell
 python lab/run_ticket.py S10 --restore
 ```
