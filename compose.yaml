@@ -27,6 +27,7 @@ volumes:
   filebeat-var:
   wazuh-indexer-data:
   wazuh-certs:
+  n8n-data:
 
 services:
   # ── 서버: 포털(원작 반소람)·MySQL·티켓 저장소(원작 김상혁) ──
@@ -129,6 +130,25 @@ services:
       - graylog-data:/usr/share/graylog/data/journal
       - ./infra/graylog/lookup:/usr/share/graylog/data/lookup:ro
     mem_limit: 1536m
+    restart: unless-stopped
+
+  # ── n8n (원작 워크플로: 김대훈 외, 단일 PC 반입: 반소람). 반입: infra/n8n/load.py ──
+  n8n:
+    image: n8nio/n8n:2.39.5
+    container_name: haedam-n8n
+    profiles: [soc]
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?.env}
+      WEBHOOK_URL: http://10.250.0.103:5678/
+      GENERIC_TIMEZONE: Asia/Seoul
+      TZ: Asia/Seoul
+      N8N_SECURE_COOKIE: "false"   # http://127.0.0.1:5678 로그인용
+      N8N_DIAGNOSTICS_ENABLED: "false"
+    networks:
+      lan: {ipv4_address: 10.250.0.103}
+    ports: ["127.0.0.1:5678:5678"]
+    volumes: [n8n-data:/home/node/.n8n]
+    mem_limit: 768m
     restart: unless-stopped
 
   # ── pfSense (원작 규칙·도구: 김명준, 컨테이너화: 반소람) ──
