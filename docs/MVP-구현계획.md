@@ -333,8 +333,8 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 - [x] **1단계:** README를 쓴다.
 - [x] **2단계(리허설):** `docker compose --profile "*" down -v`로 볼륨을 지운다. pfSense 디스크도 지우고 `.env`를 새로 만든다. 그다음 **README만 보고** 처음부터 설치한다. 막힌 지점마다 README를 고치고 저널에 적는다. 끝나면 `check_stack.py` 전부 OK, S10 1회 완주를 확인한다.
 - [x] **3단계:** `python tools/secret_scan.py` → 0건, `git status`에 `.env`가 없는지 확인한다.
-- [ ] **4단계:** 커밋한다. `docs: README 설치 순서·구성별 접속·티켓 실측 안내`
-- [ ] **5단계:** 사용자 확인을 받은 뒤 `gh repo edit --visibility public --accept-visibility-change-consequences`로 공개 전환한다. 외부 게시이므로 확인 없이 진행하지 않는다.
+- [x] **4단계:** 커밋한다. `docs: README 설치 순서·구성별 접속·티켓 실측 안내`
+- [x] **5단계:** 사용자 확인을 받은 뒤 `gh repo edit --visibility public --accept-visibility-change-consequences`로 공개 전환한다. 외부 게시이므로 확인 없이 진행하지 않는다.
 
 ### Task 9: 정량평가 요약
 
