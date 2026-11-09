@@ -99,14 +99,21 @@ def last_run(case):
     return ts(json.loads(lines[-1])["input_at"]) if lines else None
 
 
-def find_ticket(case, group_key, since, timeout=180):
+def tickets_for(group_key):
+    return {t["ticket_id"]: t for t in get(f"{TICKETS}?limit=200")["items"] if t["group_key"] == group_key}
+
+
+def find_ticket(case, group_key, before, timeout=180):
+    """A ticket for this source that did not exist before the input. S8 and S10 share one seat-B ticket per
+    source (the S10 input also fires S8), so match on group_key, not case_id. S10 waits for its pfSense action."""
     end = time.time() + timeout
     while time.time() < end:
-        for t in get(f"{TICKETS}?case_id={case}&limit=50")["items"]:
-            if t["group_key"] == group_key and ts(t["updated_at"]) >= since:
-                return get(f"{TICKETS}/{t['ticket_id']}")["ticket"], t
+        for tid in tickets_for(group_key).keys() - before:
+            t = get(f"{TICKETS}/{tid}")["ticket"]
+            if case != "S10" or any(a["via"] == "pfsense" for a in t.get("actions", [])):
+                return t
         time.sleep(5)
-    return None, None
+    return None
 
 
 def main():
@@ -124,6 +131,7 @@ def main():
         raise SystemExit("precheck: " + ", ".join(problems))
 
     run = {"case": case, "src": src, "run_id": now.strftime("%m%d%H%M%S")}
+    before = set(tickets_for(src if case != "S1" else "__none__"))  # S1 uses a fresh username each run
     if case == "S1":
         user, pw = f"zz_a_s1_{run['run_id']}", secrets.token_urlsafe(12)
         run["register"] = portal_login("haedam-normal", NORMAL, "register", user, pw=pw)["statuses"]
@@ -139,7 +147,7 @@ def main():
         group_key = src
     print("input", run["input"], flush=True)
 
-    ticket, row = find_ticket(case, group_key, ts(run["input_at"]))
+    ticket = find_ticket(case, group_key, before)
     if not ticket:
         run.update(result="fail", reason="no ticket within 180s")
     else:
@@ -157,7 +165,7 @@ def main():
         if case == "S1":
             run["effect"]["normal_login_same_user"] = portal_login("haedam-normal", NORMAL, "login", group_key, pw=pw)["statuses"]
         if a.restore:
-            body = json.dumps({"seat": SEAT[case], "case_id": case, "group_key": group_key, "approver": "run_ticket",
+            body = json.dumps({"seat": SEAT[case], "case_id": ticket["case_id"], "group_key": group_key, "approver": "run_ticket",
                                "dry_run": False, "reason": "lab run restore"}).encode()
             req = urllib.request.Request("http://127.0.0.1:5678/webhook/haedam-release", data=body, method="POST",
                                          headers={"Content-Type": "application/json", "X-Haedam-Key": e["N8N_WEBHOOK_KEY"]})
