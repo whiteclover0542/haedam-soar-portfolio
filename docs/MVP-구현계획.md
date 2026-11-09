@@ -343,7 +343,8 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 
 **인터페이스**
 - 사용: Task 7의 `docs/tickets/*/runs.jsonl`. 한 줄 필드는 `ticket, run_id, src, condition_met_at, detected_at, responded_at, restored_at, auto_ok, restore_ok, normal_ok`이다.
-- 만드는 것: `summarize(rows: list[dict]) -> dict` → 티켓별·전체 `runs`, `auto_rate`, `restore_rate`, `normal_ok_rate`, `mttd_median`, `mttr_median`(초)
+- 만드는 것: `summarize(rows: list[dict]) -> dict` → 티켓별·전체 `runs`, `auto_rate`, `restore_rate`, `normal_fail_runs`, `mttd_median`, `detect_to_respond_median`, `mttr_median`(초)
+- 지표 정의는 팀원 공유 문서(https://claude.ai/artifact/RXmW2oN9CRPYiBpkNgTFvR)의 "정량평가 지표" 표와 같다. 오탐은 기준선 입력 회차(`baseline: true` 행)에서 발동한 수로 센다.
 - `python tools/summarize_runs.py`는 `docs/정량평가.md`의 표를 다시 쓴다.
 
 - [ ] **1단계:** 실패하는 테스트를 쓴다.
