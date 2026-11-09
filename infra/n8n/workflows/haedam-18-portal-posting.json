@@ -1,7 +1,7 @@
 [
  {
   "id": "haedamPortalPosting01",
-  "name": "haedam-18 포털 민원 작성 제한 (113)",
+  "name": "haedam-18 포털 민원 작성 제한 (115)",
   "active": false,
   "nodes": [
    {
@@ -27,7 +27,7 @@
      0
     ],
     "parameters": {
-     "jsCode": "// 입력 검증·Idempotency-Key. 키 형식: {ticket_id}-111-{username}-lock (API-CONTRACT n8n 규칙 #46)\nconst b = $input.first().json;\nconst ctx = b.ctx;\nif (b.action !== 'restrict') return [{ json: { result: 'failed', detail: 'only restrict is automated (해제는 담당자가)', stop: true, ctx } }];\nif (!b.username || !/^[A-Za-z0-9_.\\-]{1,64}$/.test(b.username)) return [{ json: { result: 'failed', detail: 'bad_username', stop: true, ctx } }];\nif (!b.ticket_id) return [{ json: { result: 'failed', detail: 'ticket_id required for Idempotency-Key', stop: true, ctx } }];\nconst idem = `${b.ticket_id}-113-${b.username}-restrict`;\nreturn [{ json: { action: 'restrict', username: b.username, idem, url: 'http://10.250.0.2:5000/api/v1/response/accounts/posting', method: 'POST',\n  dry_run: b.dry_run !== false, stop: false, ctx, requested_at: new Date().toISOString() } }];\n"
+     "jsCode": "// 입력 검증·Idempotency-Key. 키 형식: {ticket_id}-111-{username}-lock (API-CONTRACT n8n 규칙 #46)\nconst b = $input.first().json;\nconst ctx = b.ctx;\nif (b.action !== 'restrict') return [{ json: { result: 'failed', detail: 'only restrict is automated (해제는 담당자가)', stop: true, ctx } }];\nif (!b.username || !/^[A-Za-z0-9_.\\-]{1,64}$/.test(b.username)) return [{ json: { result: 'failed', detail: 'bad_username', stop: true, ctx } }];\nif (!b.ticket_id) return [{ json: { result: 'failed', detail: 'ticket_id required for Idempotency-Key', stop: true, ctx } }];\nconst idem = `${b.ticket_id}-115-${b.username}-restrict`;\nreturn [{ json: { action: 'restrict', username: b.username, idem, url: 'http://10.250.0.2:5000/api/v1/response/accounts/posting', method: 'POST',\n  dry_run: b.dry_run !== false, stop: false, ctx, requested_at: new Date().toISOString() } }];\n"
     }
    },
    {

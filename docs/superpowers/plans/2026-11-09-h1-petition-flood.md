@@ -149,7 +149,7 @@ def test_bootstrap_lists_h1():
 
 **Interfaces:**
 - Consumes: Task 1 API, Task 2 알림 본문
-- Produces: 하위 `haedamPortalPosting01` — 입력 `{action: "restrict"|"allow", username, ticket_id, dry_run, ctx}`, 출력은 `haedam-13`과 같은 형태(`ok, result, applied_verified, detail`). 메인 `haedamH1Main01` — 웹훅 `haedam-h1`, `group_key = username`, 조치 기록 `{bot: "113", via: "portal", action: "restrict_posting", target: username}`(111 계정 잠금·112 IP 차단과 구분), seat `A`.
+- Produces: 하위 `haedamPortalPosting01` — 입력 `{action: "restrict"|"allow", username, ticket_id, dry_run, ctx}`, 출력은 `haedam-13`과 같은 형태(`ok, result, applied_verified, detail`). 메인 `haedamH1Main01` — 웹훅 `haedam-h1`, `group_key = username`, 조치 기록 `{bot: "115", via: "portal", action: "restrict_posting", target: username}`(111 계정 잠금·112 IP 차단·113 Discord·114 티켓 저장소와 구분), seat `A`.
 
 - [x] **Step 1: 실패하는 테스트** — 기존 `test_all_referenced_credentials_built`·`test_attach_sets_ids_on_every_header_auth_node`가 새 파일까지 덮는다. 추가:
 
