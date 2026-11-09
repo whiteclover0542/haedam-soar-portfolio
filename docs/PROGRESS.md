@@ -14,6 +14,18 @@
 3. 웹 설정(포트 포워드·syslog·SSH)
 4. 스파이크 판정: pfSense를 거쳐 200 응답, 출발지 보존, 차단 로그
 
+## 병렬 세션 분담 (11/09~)
+
+| 세션 | 작업 폴더 · 브랜치 | 맡는 Task | 비고 |
+| --- | --- | --- | --- |
+| 1 (메인) | `C:\SR\final_project` · `mvp` | Task 1 pfSense → Task 2 서버 | pfSense 설치는 사용자가 콘솔에서 직접 함. PROGRESS 갱신은 이 세션만 한다 |
+| 2 (관제) | `C:\SR\final_project-soc` · `mvp-soc` | Task 5 Wazuh → Task 3 Graylog → Task 4 n8n | 포털·pfSense가 필요한 실동작 확인 단계는 건너뛰고, 그 사실을 일지에 남긴다 |
+
+**규칙**
+- 두 세션 모두 `compose.yaml`의 자기 서비스 블록만 추가한다.
+- 세션 2는 PROGRESS를 고치지 않는다. 끝나면 `docs/journal/`에 결과를 적고 `mvp-soc`를 push한다.
+- 세션 1이 `mvp-soc`를 `mvp`에 병합한 뒤 Task 6~9를 한 세션에서 진행한다.
+
 ## 한눈에 보기
 
 | 단계 | 내용 | 상태 |
