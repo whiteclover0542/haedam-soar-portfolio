@@ -10,8 +10,12 @@ from pathlib import Path
 from statistics import median
 
 ROOT = Path(__file__).resolve().parents[1]
-CASES = ["S10", "S8", "S1"]
-EXPECTED_VIA = {"S10": {"portal", "pfsense"}, "S8": {"portal"}, "S1": {"portal"}}
+CASES = ["S10", "S8", "S1", "H1"]
+EXPECTED_VIA = {"S10": {"portal", "pfsense"}, "S8": {"portal"}, "S1": {"portal"}, "H1": {"portal"}}
+RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting")
+# What the attacker / the normal user should get while the response is in force.
+REFUSED = {"H1": ("429",)}
+NORMAL_OK = {"H1": "201"}
 
 
 def _ts(t):
@@ -19,20 +23,20 @@ def _ts(t):
 
 
 def blocked_vias(r):
-    return {a[0] for a in r.get("actions") or [] if a[1] in ("block", "fw_block") and a[2] in ("applied", "already_applied")}
+    return {a[0] for a in r.get("actions") or [] if a[1] in RESPONSE_ACTIONS and a[2] in ("applied", "already_applied")}
 
 
 def auto_ok(r):
     """Every expected block applied without a person, and the effect seen: attacker refused, normal user fine."""
     eff = r.get("effect") or {}
-    return (EXPECTED_VIA[r["case"]] <= blocked_vias(r) and eff.get("attacker") in ("403", "000")
-            and eff.get("normal") == "200")
+    return (EXPECTED_VIA[r["case"]] <= blocked_vias(r) and eff.get("attacker") in REFUSED.get(r["case"], ("403", "000"))
+            and eff.get("normal") == NORMAL_OK.get(r["case"], "200"))
 
 
 def input_to_block(r):
     if r.get("input_to_block_s") is not None:
         return r["input_to_block_s"]
-    done = [a[3] for a in r.get("actions") or [] if a[1] in ("block", "fw_block") and a[2] in ("applied", "already_applied") and a[3]]
+    done = [a[3] for a in r.get("actions") or [] if a[1] in RESPONSE_ACTIONS and a[2] in ("applied", "already_applied") and a[3]]
     return round(max((_ts(t) - _ts(r["input_at"])).total_seconds() for t in done), 3) if done else None
 
 
@@ -41,7 +45,9 @@ def _median(values):
     return round(median(values), 3) if values else None
 
 
-def _stats(rows):
+def _stats(all_rows):
+    baseline = [r for r in all_rows if r.get("baseline")]
+    rows = [r for r in all_rows if not r.get("baseline")]
     tried = [r for r in rows if r.get("restore")]
     return {"runs": len(rows),
             "auto_ok": sum(map(auto_ok, rows)),
@@ -49,7 +55,9 @@ def _stats(rows):
             "restore_ok": sum((r["restore"] or {}).get("attacker_after") == "200" for r in tried),
             "restore_tried": len(tried),
             "restore_rate": sum((r["restore"] or {}).get("attacker_after") == "200" for r in tried) / len(tried) if tried else None,
-            "normal_fail_runs": sum((r.get("effect") or {}).get("normal") not in (None, "200") for r in rows),
+            "normal_fail_runs": sum((r.get("effect") or {}).get("normal") not in (None, NORMAL_OK.get(r["case"], "200")) for r in rows),
+            "baseline_runs": len(baseline),
+            "false_positives": sum(bool(r.get("ticket_id")) for r in baseline),
             "mttd_median": _median(r.get("mttd_s") for r in rows if auto_ok(r)),
             "detect_to_block_median": _median(r.get("detect_to_block_s") for r in rows if auto_ok(r)),
             "input_to_block_median": _median(input_to_block(r) for r in rows if auto_ok(r))}
@@ -78,12 +86,13 @@ def run_table(rows):
 
 
 def summary_table(s):
-    lines = ["| 티켓 | 회차 | 자동 대응 | 원복 | 정상 사용자 영향 | MTTD 중앙값 | 탐지→차단 중앙값 | 입력→차단 중앙값 |",
-             "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+    lines = ["| 티켓 | 회차 | 자동 대응 | 원복 | 정상 사용자 영향 | 오탐(기준선) | MTTD 중앙값 | 탐지→차단 중앙값 | 입력→차단 중앙값 |",
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for k in [c for c in CASES if c in s] + ["total"]:
         v = s[k]
         lines.append(f"| {'전체' if k == 'total' else k} | {v['runs']} | {v['auto_ok']}/{v['runs']} | "
-                     f"{v['restore_ok']}/{v['restore_tried']} | {v['normal_fail_runs']}회 | {_fmt(v['mttd_median'], '초')} | "
+                     f"{v['restore_ok']}/{v['restore_tried']} | {v['normal_fail_runs']}회 | "
+                     f"{v['false_positives']}/{v['baseline_runs']} | {_fmt(v['mttd_median'], '초')} | "
                      f"{_fmt(v['detect_to_block_median'], '초')} | {_fmt(v['input_to_block_median'], '초')} |")
     return "\n".join(lines)
 

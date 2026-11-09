@@ -36,3 +36,14 @@ def test_input_to_block_falls_back_to_actions():
 def test_normal_impact_and_restore():
     s = summarize([row(normal="403"), row(restored="000"), row()])
     assert s["S8"]["normal_fail_runs"] == 1 and s["S8"]["restore_rate"] == 2 / 3
+
+
+def test_h1_auto_ok_expects_429():
+    r = row(case="H1", actions=[["portal", "restrict_posting", "applied", "2026-11-09T03:00:40+00:00"]],
+            effect={"attacker": "429", "normal": "201"})
+    assert summarize([r])["H1"]["auto_rate"] == 1.0
+
+
+def test_baseline_rows_count_false_positives_only():
+    s = summarize([row(case="H1", baseline=True, ticket_id="T-1"), row(case="H1", baseline=True, ticket_id=None), row(case="H1")])
+    assert s["H1"]["runs"] == 1 and s["H1"]["false_positives"] == 1 and s["H1"]["baseline_runs"] == 2
