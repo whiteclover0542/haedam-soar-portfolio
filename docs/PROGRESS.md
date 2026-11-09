@@ -68,4 +68,4 @@
 1. Docker Desktop을 WSL2 백엔드로 설치하고, `.wslconfig`도 위와 같이 설정한다.
 2. `gh auth login` → `gh repo clone whiteclover0542/haedam-soar-portfolio` → `git switch mvp`
 3. `.env`를 새로 만든다(git에 없음). pfSense ISO를 받고 다시 설치한다.
-4. Claude Code에서 이 파일과 구현 계획의 진행 기록을 읽고, 첫 미완료 Task부터 이어 간다.
+4. Claude Code에서 이 파일, `git log`, 작업 일지를 읽고 첫 미완료 Task부터 이어 간다. 세부 진행 기록(`.superpowers/`)은 git에 올라가지 않으므로, PC 사이에서는 이 파일이 기준이다. Task가 끝날 때마다 이 표를 갱신한다.
