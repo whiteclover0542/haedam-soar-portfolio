@@ -219,6 +219,8 @@ def main():
                               "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"]}
         refused, fine = (("429",), "201") if case == "H1" else (("403", "000"), "200")
         ok = bool(blocked) and run["effect"]["attacker"] in refused and run["effect"]["normal"] == fine
+        if case == "S10":  # the point of S10 is the perimeter block; a portal-only 403 is not a pass
+            ok = ok and any(x[0] == "pfsense" for x in blocked) and run["effect"]["attacker"] == "000"
         if a.restore:
             ok = ok and run["restore"]["attacker_after"] == fine
         run["result"] = "pass" if ok else "fail"
