@@ -136,6 +136,7 @@ python lab/run_ticket.py S10 --restore
 | S10 경계 차단·스캔·로그인 반복 | `203.0.113.22` | 스캔 404 → 로그인 401 → ping(pfSense 차단) | 포털 차단 + pfSense 차단 | [docs/tickets/S10](docs/tickets/S10/README.md) |
 | S8 포털 스캔·로그인 반복 | `203.0.113.21` | 스캔 404 → 로그인 401 | 포털 차단(pfSense 호출 없음) | [docs/tickets/S8](docs/tickets/S8/README.md) |
 | S1 로그인 무차별 대입 | `203.0.113.11` | 같은 계정 로그인 실패 9회 | 포털에서 출발지 차단, 같은 계정의 정상 로그인은 유지 | [docs/tickets/S1](docs/tickets/S1/README.md) |
+| H1 민원 도배 | `203.0.113.11` | 같은 계정으로 민원 8건 연달아 등록 | 그 계정만 민원 작성 제한(429), 로그인·조회는 유지 | [docs/tickets/H1](docs/tickets/H1/README.md) |
 
 실행기는 다음 순서로 진행하고 결과를 `docs/tickets/<ID>/runs.jsonl`에 한 줄씩 남깁니다.
 
