@@ -82,18 +82,18 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - `(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['"]?[A-Za-z0-9/+_-]{16,}`
   - `.env.example`의 `change-me`·`replace-with` 자리표시는 허용한다.
 
-- [ ] **1단계:** `git init`을 하고 `.gitignore`에 `.env`, `*.qcow2`, `*.iso`, `.venv/`, `__pycache__/`, `node_modules/`, `dist/`, `instance/`, `.pytest_cache/`를 넣는다.
-- [ ] **2단계:** 실패하는 테스트를 쓴다. `tests/test_secret_scan.py`
+- [x] **1단계:** `git init`을 하고 `.gitignore`에 `.env`, `*.qcow2`, `*.iso`, `.venv/`, `__pycache__/`, `node_modules/`, `dist/`, `instance/`, `.pytest_cache/`를 넣는다.
+- [x] **2단계:** 실패하는 테스트를 쓴다. `tests/test_secret_scan.py`
   - `test_flags_discord_webhook`: 임시 파일에 `https://discord.com/api/webhooks/123/abc` → 종료 1
   - `test_flags_private_key`: `-----BEGIN OPENSSH PRIVATE KEY-----` → 종료 1
   - `test_allows_placeholder`: `GRAYLOG_PASSWORD_SECRET=change-me-to-a-long-random-string` → 종료 0
-- [ ] **3단계:** `python -m pytest tests/test_secret_scan.py -v`를 돌려 FAIL을 확인한다.
-- [ ] **4단계:** `tools/secret_scan.py`를 구현한다. `re`와 `pathlib`만 쓴다. 인자가 없으면 `git ls-files` 대상을 본다.
-- [ ] **5단계:** 같은 명령으로 PASS를 확인한다.
-- [ ] **6단계:** 위 반입 목록을 복사하고 `python tools/secret_scan.py`를 돌린다. 발견이 0이 될 때까지 값을 `.env` 참조로 바꾼다. 무엇을 뺐는지 `docs/journal/2026-11-09.md`에 적는다.
-- [ ] **7단계:** `CREDITS.md`에 반입 경로별 원작자와 원본 커밋 해시 표를 쓴다.
-- [ ] **8단계:** 커밋한다. `chore: 팀 저장소에서 MVP 소스 반입, 민감정보 검사 도구`
-- [ ] **9단계(집 PC 이어 작업용):** 사용자에게 저장소 이름과 공개 여부를 확인받는다. `secret_scan` 0건을 다시 확인한 뒤 `gh repo create <이름> --private --source . --push`를 실행한다. 제출 직전 Task 8에서 공개로 바꾼다. 이후 작업 단위마다 push한다.
+- [x] **3단계:** `python -m pytest tests/test_secret_scan.py -v`를 돌려 FAIL을 확인한다.
+- [x] **4단계:** `tools/secret_scan.py`를 구현한다. `re`와 `pathlib`만 쓴다. 인자가 없으면 `git ls-files` 대상을 본다.
+- [x] **5단계:** 같은 명령으로 PASS를 확인한다.
+- [x] **6단계:** 위 반입 목록을 복사하고 `python tools/secret_scan.py`를 돌린다. 발견이 0이 될 때까지 값을 `.env` 참조로 바꾼다. 무엇을 뺐는지 `docs/journal/2026-11-09.md`에 적는다.
+- [x] **7단계:** `CREDITS.md`에 반입 경로별 원작자와 원본 커밋 해시 표를 쓴다.
+- [x] **8단계:** 커밋한다. `chore: 팀 저장소에서 MVP 소스 반입, 민감정보 검사 도구`
+- [x] **9단계(집 PC 이어 작업용):** 사용자에게 저장소 이름과 공개 여부를 확인받는다. `secret_scan` 0건을 다시 확인한 뒤 `gh repo create <이름> --private --source . --push`를 실행한다. 제출 직전 Task 8에서 공개로 바꾼다. 이후 작업 단위마다 push한다.
 
 ### Task 1: pfSense 컨테이너 (스파이크 겸 구성)
 
@@ -113,21 +113,21 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - NIC는 `-device e1000`, 디스크는 볼륨의 `pfsense.qcow2`(8GB, 없으면 생성), 설치 전에는 ISO로 부팅한다.
 - 컨테이너 권한은 `cap_add: [NET_ADMIN]`, `devices: [/dev/net/tun, /dev/kvm]`이다. KVM이 없을 때를 대비해 `devices`는 `.env`의 `PFSENSE_KVM`으로 고른다.
 
-- [ ] **1단계:** Docker Desktop을 켜고 `docker run --rm --device /dev/kvm alpine ls -l /dev/kvm`을 실행한다. 결과(있음/없음)를 저널에 적는다.
-- [ ] **2단계:** Dockerfile·entrypoint·compose를 쓰고 pfSense CE 2.7.2 ISO를 받는다(`atxfiles.netgate.com/mirror/downloads/pfSense-CE-2.7.2-RELEASE-amd64.iso.gz`, SHA-256 확인). `INSTALL.md`에 받는 명령을 적는다.
-- [ ] **3단계:** `127.0.0.1:8006` 콘솔에서 설치한다. 인터페이스는 WAN `em0`=203.0.113.1/24, LAN `em1`=10.250.0.1/24로 지정한다. 화면 순서를 `INSTALL.md`에 캡처와 함께 적는다.
-- [ ] **4단계:** 웹(127.0.0.1:8443)에서 다음을 설정한다.
+- [x] **1단계:** Docker Desktop을 켜고 `docker run --rm --device /dev/kvm alpine ls -l /dev/kvm`을 실행한다. 결과(있음/없음)를 저널에 적는다.
+- [x] **2단계:** Dockerfile·entrypoint·compose를 쓰고 pfSense CE 2.7.2 ISO를 받는다(`atxfiles.netgate.com/mirror/downloads/pfSense-CE-2.7.2-RELEASE-amd64.iso.gz`, SHA-256 확인). `INSTALL.md`에 받는 명령을 적는다.
+- [x] **3단계:** `127.0.0.1:8006` 콘솔에서 설치한다. 인터페이스는 WAN `em0`=203.0.113.1/24, LAN `em1`=10.250.0.1/24로 지정한다. 화면 순서를 `INSTALL.md`에 캡처와 함께 적는다.
+- [x] **4단계:** 웹(127.0.0.1:8443)에서 다음을 설정한다.
   - 포트 포워드 WAN:80→10.250.0.2:5000
   - WAN 차단 기본 규칙 로깅 켜기
   - 원격 syslog 10.250.0.100:514 UDP(filter 로그)
   - SSH 켜기
   - `lab/pfsense/INSTALL.md`(김명준) 순서대로 도구 설치, `haedam-pf` 계정과 공개키 등록
-- [ ] **5단계(스파이크 판정):** 다음을 확인한다. 하나라도 실패하면 설계 4-3의 대체안으로 바꾸고 저널에 원인을 적는다.
+- [x] **5단계(스파이크 판정):** 다음을 확인한다. 하나라도 실패하면 설계 4-3의 대체안으로 바꾸고 저널에 원인을 적는다.
   - 임시 `nginx`를 10.250.0.2에 붙이고 `normal` 컨테이너에서 `curl -s -o /dev/null -w '%{http_code}' http://203.0.113.1/` → `200`
   - nginx 로그의 출발지가 `203.0.113.100`
   - `docker run --rm --network wan --ip 203.0.113.22 alpine ping -c1 203.0.113.1`을 보내면 pfSense `Status > System Logs > Firewall`에 차단 1건이 남음
-- [ ] **6단계:** `Diagnostics > Backup`으로 `config.xml`을 내보낸다. 비밀번호 해시·SSH 키·인증서 개인키를 자리표시로 바꾼 뒤 `python tools/secret_scan.py infra/pfsense`로 0건을 확인한다.
-- [ ] **7단계:** 커밋한다. `feat(pfsense): QEMU 컨테이너로 pfSense CE 2.7.2 구동, wan/lan 브리지`
+- [x] **6단계:** `Diagnostics > Backup`으로 `config.xml`을 내보낸다. 비밀번호 해시·SSH 키·인증서 개인키를 자리표시로 바꾼 뒤 `python tools/secret_scan.py infra/pfsense`로 0건을 확인한다.
+- [x] **7단계:** 커밋한다. `feat(pfsense): QEMU 컨테이너로 pfSense CE 2.7.2 구동, wan/lan 브리지`
 
 ### Task 2: 서버 (포털·MySQL·티켓 저장소)
 
@@ -192,12 +192,12 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - `replace_stream_ids(defn: dict, ids: dict[str, str]) -> dict`
   - `notification_url(raw: dict, base: str) -> dict`
 
-- [ ] **1단계:** 실패하는 테스트를 쓴다.
+- [x] **1단계:** 실패하는 테스트를 쓴다.
   - `test_replace_stream_ids`: s10 정의 → `streams == [ids['haedam-portal'], ids['pfsense']]`, 결과 JSON에 `REPLACE_` 문자열이 없음
   - `test_notification_url_rewritten`: `host.docker.internal` 주소가 `http://10.250.0.103:5678/webhook/haedam-s8-s10`로 바뀜
-- [ ] **2단계:** `python -m pytest tests/test_graylog_bootstrap.py -v` → FAIL
+- [x] **2단계:** `python -m pytest tests/test_graylog_bootstrap.py -v` → FAIL
 - [ ] **3단계:** `bootstrap.py`를 구현한다. `urllib.request`만 쓰고 헤더는 `X-Requested-By: bootstrap`이다. 이벤트 정의는 `POST /api/events/definitions?schedule=true`로 넣는다.
-- [ ] **4단계:** 같은 명령으로 PASS를 확인한다.
+- [x] **4단계:** 같은 명령으로 PASS를 확인한다.
 - [ ] **5단계:** 실제 기동 후 bootstrap을 실행하고 다음을 확인한다.
   - `normal`에서 포털 요청 1건을 보내면 Search `source:haedam-portal`에 1건이 뜬다.
   - Task 1의 ping 1건이 `rule:"pfsense-block"`으로 정규화돼 보인다.
@@ -244,7 +244,7 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 - 만드는 것: `wazuh.manager` 10.250.0.4(1514·1515·55000), 대시보드 `https://127.0.0.1:5601`
 - MVP에서는 구동과 접속만 확인한다. Graylog 연동은 S7 단계에서 한다.
 
-- [ ] **1단계:** compose·인증서 생성 설정을 쓴다. 인증서는 `docker compose -f infra/wazuh/generate-certs.yml run --rm generator`로 만들고, `infra/wazuh/config/wazuh_indexer_ssl_certs/`는 `.gitignore`에 넣는다.
+- [x] **1단계:** compose·인증서 생성 설정을 쓴다. 인증서는 `docker compose -f infra/wazuh/generate-certs.yml run --rm generator`로 만들고, `infra/wazuh/config/wazuh_indexer_ssl_certs/`는 `.gitignore`에 넣는다.
 - [ ] **2단계:** `up -d` 뒤 3분 안에 `curl -k -u wazuh-wui:$WAZUH_API_PASSWORD https://<manager>:55000/security/user/authenticate`(n8n 컨테이너 안에서 실행)이 토큰을 반환하고, 대시보드 로그인이 되는지 확인한다.
 - [ ] **3단계:** 커밋한다. `feat(wazuh): single-node 4.9.2 단일 PC 구성`
 
