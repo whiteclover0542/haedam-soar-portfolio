@@ -7,19 +7,7 @@
 
 ## 지금 할 일
 
-**Task 1 pfSense:** KVM을 확인했고 이미지 빌드도 끝났다. 지금은 ISO를 받는 중이다. 다음 순서는 다음과 같다.
-
-1. `docker compose --profile pfsense up -d`
-2. `127.0.0.1:8006` 콘솔에서 설치(WAN `em0` 203.0.113.1, LAN `em1` 10.250.0.1)
-3. 웹 설정(포트 포워드·syslog·SSH)
-4. 스파이크 판정: pfSense를 거쳐 200 응답, 출발지 보존, 차단 로그
-
-## 병렬 세션 분담 (11/09~)
-
-| 세션 | 작업 폴더 · 브랜치 | 맡는 Task | 비고 |
-| --- | --- | --- | --- |
-| 1 (메인) | `C:\SR\final_project` · `mvp` | Task 1 pfSense → Task 2 서버 | pfSense 설치는 사용자가 콘솔에서 직접 함. PROGRESS 갱신은 이 세션만 한다 |
-| 2 (관제) | `C:\SR\final_project-soc` · `mvp-soc` | Task 5 Wazuh → Task 3 Graylog → Task 4 n8n | 포털·pfSense가 필요한 실동작 확인 단계는 건너뛰고, 그 사실을 일지에 남긴다 |
+**Task 2 서버(포털·MySQL·티켓 저장소).** Task 1 pfSense는 끝났다. 설치 절차와 함정은 [infra/pfsense/INSTALL.md](../infra/pfsense/INSTALL.md)에 있다.
 
 **규칙**
 - 두 세션 모두 `compose.yaml`의 자기 서비스 블록만 추가한다.
@@ -46,7 +34,7 @@
 | # | 작업 | 상태 | 확인 근거 |
 | --- | --- | --- | --- |
 | 0 | 저장소 반입·민감정보 검사·GitHub 비공개 저장소 | ✅ | 테스트 8개 통과, `secret_scan` 0건, `whiteclover0542/haedam-soar-portfolio` push |
-| 1 | pfSense 컨테이너(QEMU/KVM) | 🟡 | KVM 사용 가능, 이미지 빌드 완료. 설치·스파이크 판정 전 |
+| 1 | pfSense 컨테이너(QEMU/KVM) | ✅ | 포트 포워드 200, 출발지 `203.0.113.100` 보존, `.22` 차단 filterlog 원격 syslog 전송, 전용 키 `status` ok·임의 명령/`.104` 거부, `secret_scan` 0건 |
 | 2 | 서버(포털·MySQL·티켓 저장소) | ⬜ | |
 | 3 | Graylog + 탐지 설정 자동 반입 | ⬜ | |
 | 4 | n8n 워크플로·자격 증명 반입 | ⬜ | |
@@ -172,6 +160,9 @@ MVP가 끝난 뒤 단계마다 구현 계획을 따로 쓴다. 아래 세부 작
 | 11/09 | 검사 시연 티켓은 S10·S8, 본인 티켓 S1 동반 | S10 하나로 서버·Graylog·pfSense·n8n을 모두 보여줌 |
 | 11/09 | 신규 케이스 H1~H3(가용성·기밀성·무결성), H4는 여유 시 | 시청 업무에 맞춘 차별점 |
 | 11/09 | 팀 주소 체계(203.0.113.x / 10.250.0.x)를 Docker 망에 그대로 유지 | 워크플로·규칙·보호 IP 목록 수정 최소화 |
+| 11/09 | wan 망 마스커레이드 끔 | 켜면 lan으로 포워딩된 출발지가 `10.250.0.254`로 바뀜. wan 컨테이너는 인터넷 불가 → 도구는 빌드 때 설치 |
+| 11/09 | `haedam-pf` 계정 대신 admin에 전용 키 + `from="10.250.0.103",restrict,command=` | 도구가 root 필요. n8n 자격 증명 사용자 이름은 `admin` |
+| 11/09 | 컨테이너 이름에 `haedam-` 접두사 | 다른 프로젝트의 pfSense·Docker와 충돌 방지 |
 
 ## 환경 상태 (학원 PC)
 
