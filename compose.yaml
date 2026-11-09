@@ -5,6 +5,9 @@ name: haedam
 networks:
   wan:
     ipam: {config: [{subnet: 203.0.113.0/24, gateway: 203.0.113.254}]}
+    # 끄지 않으면 Docker가 lan으로 포워딩된 203.0.113.x 출발지를 게이트웨이 주소로 바꿔
+    # 출발지 보존이 깨진다. 대신 wan 컨테이너는 인터넷에 못 나간다(도구는 빌드 때 설치).
+    driver_opts: {com.docker.network.bridge.enable_ip_masquerade: "false"}
   lan:
     ipam: {config: [{subnet: 10.250.0.0/24, gateway: 10.250.0.254}]}
   console: {}   # pfSense 설치 콘솔(VNC 웹)만 쓰는 망
@@ -16,7 +19,7 @@ services:
   # ── pfSense (원작 규칙·도구: 김명준, 컨테이너화: 반소람) ──
   pfsense:
     build: infra/pfsense
-    container_name: pfsense
+    container_name: haedam-pfsense
     profiles: [pfsense]
     cap_add: [NET_ADMIN]
     devices: [/dev/net/tun, /dev/kvm]
@@ -38,7 +41,7 @@ services:
       dockerfile_inline: |
         FROM alpine:3.20
         RUN apk add --no-cache socat
-    container_name: pf-ui
+    container_name: haedam-pf-ui
     profiles: [pfsense]
     command: sh -c "socat TCP-LISTEN:8443,fork,reuseaddr TCP:10.250.0.1:443 & exec socat TCP-LISTEN:2222,fork,reuseaddr TCP:10.250.0.1:22"
     networks:

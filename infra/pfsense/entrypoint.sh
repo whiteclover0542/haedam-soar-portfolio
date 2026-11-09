@@ -15,6 +15,9 @@ bridge() {  # bridge $1 (container NIC) with tap $2
   ip link add "br-$2" type bridge
   ip addr flush dev "$1"
   ip link set "$1" master "br-$2"
+  # Docker's side reflects the VM's own frames back in; without this the bridge
+  # learns the VM MAC on $1 and LAN/WAN traffic stops reaching the VM.
+  command bridge link set dev "$1" learning off  # `command`: skip this bridge() function
   ip link set "$2" master "br-$2"
   ip link set "br-$2" up
   ip link set "$2" up
