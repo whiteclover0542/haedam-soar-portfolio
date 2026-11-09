@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTAINER = "haedam-n8n"
 # Webhook entry points to publish. Sub-workflows are published too: n8n 2.x refuses to execute an
 # unpublished one ("Workflow is not active"), and they have no webhook, so publishing exposes nothing.
-PUBLISH = ["haedamS1Main01", "haedamS8S10Main01", "haedamTicketCheck01"]
+PUBLISH = ["haedamS1Main01", "haedamS8S10Main01", "haedamTicketCheck01", "haedamRelease01"]
 
 
 def is_sub_workflow(w):

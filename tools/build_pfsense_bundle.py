@@ -8,7 +8,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APPROVED_SHA = 'f0eea2979466537f1ef45db85df3caf378732824d6255f851a7e8af30a3553ed'
+APPROVED_SHA = 'c9f561bac13e08185a5461f79adee937b8cc2b05d225c96cdf16d70b2ae9c962'
 SOURCES = {'pfsense_response.py': 'lab/pfsense/pfsense_response.py',
            'pfsense-response.schema.json': 'contracts/pfsense-response.schema.json',
            'install_bundle.py': 'lab/pfsense/install_bundle.py', 'INSTALL.md': 'lab/pfsense/INSTALL.md'}

@@ -32,3 +32,13 @@ def test_pipeline_parts_reads_team_export():
     assert "//" not in pipeline
     assert '  rule "pfsense: rule block";' in pipeline and '",' not in pipeline  # one rule per line
     assert len(rules) == 9 and all(r.startswith('rule "pfsense: ') and r.endswith("end") for r in rules)
+
+
+def test_live_body_adds_switches_and_stays_json():
+    import json
+    from infra.graylog.bootstrap import live_body
+
+    raw = {"config": {"body_template": '{"event_id":"${event.id}","src_ip":"${event.fields.src_ip}"}'}}
+    live = json.loads(live_body(raw, True)["config"]["body_template"].replace("${", "").replace("}\"", "\""))
+    assert live["dry_run"] is False and live["store_real"] is True and "event_id" in live
+    assert live_body(raw, False) == raw

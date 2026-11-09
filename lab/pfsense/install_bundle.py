@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 TARGET = Path('/usr/local/sbin/haedam-pf-response')
 TOOL = 'pfsense_response.py'
-APPROVED_SHA = 'f0eea2979466537f1ef45db85df3caf378732824d6255f851a7e8af30a3553ed'
+APPROVED_SHA = 'c9f561bac13e08185a5461f79adee937b8cc2b05d225c96cdf16d70b2ae9c962'
 PAYLOADS = {TOOL, 'pfsense-response.schema.json', 'INSTALL.md', 'install_bundle.py'}
 
 

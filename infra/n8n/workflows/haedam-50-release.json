@@ -17,7 +17,14 @@
      "httpMethod": "POST",
      "path": "haedam-release",
      "responseMode": "responseNode",
+     "authentication": "headerAuth",
      "options": {}
+    },
+    "credentials": {
+     "httpHeaderAuth": {
+      "id": "",
+      "name": "haedam-release caller"
+     }
     },
     "webhookId": "haedam-release"
    },
@@ -31,7 +38,7 @@
      0
     ],
     "parameters": {
-     "jsCode": "// 원복(해제)은 자동으로 하지 않는다. 사람이 확인한 뒤 approver(이름)와 함께 부른다. 순서: 경계(pfSense) → 앱(포털).\nconst b = $input.first().json.body || {};\nconst CFG = { dry_run: true, live_release_enabled: false };   // 실제 해제는 포털 키·pfSense 수단이 정해진 뒤 false\nif (!CFG.dry_run && !CFG.live_release_enabled) return [{json:{ok:false,stop:true,no_action:true,verdict:'held_live_release_not_accepted'}}];\nconst need = ['seat', 'case_id', 'group_key', 'approver'];\nconst missing = need.filter(k => !b[k] || typeof b[k] !== 'string');\nif (missing.length) return [{ json: { ok: false, verdict: 'invalid_input', missing, stop: true } }];\nif (!['A', 'B', 'C', 'D'].includes(b.seat)) return [{ json: { ok: false, verdict: 'invalid_input', detail: 'seat', stop: true } }];\nconst X = { seat: b.seat, case_id: b.case_id, group_key: b.group_key, approver: b.approver.slice(0, 40), asset_id: b.asset_id || 'haedam-portal', cfg: CFG, reason: b.reason ? String(b.reason).slice(0, 200) : null };\nreturn [{ json: { mode: 'check', seat: b.seat, group_key: b.group_key, ctx: X, stop: false } }];\n"
+     "jsCode": "// 원복(해제)은 자동으로 하지 않는다. 사람이 확인한 뒤 approver(이름)와 함께 부른다. 순서: 경계(pfSense) → 앱(포털).\nconst b = $input.first().json.body || {};\nconst CFG = { dry_run: true, live_release_enabled: false };   // 실제 해제는 포털 키·pfSense 수단이 정해진 뒤 false\n// 단일 PC(11/09): 포털 키·pfSense 전용 키가 갖춰져, 본문 dry_run:false(불리언)일 때만 실제 해제한다. 웹훅은 Header Auth.\nif (b.dry_run === false) { CFG.dry_run = false; CFG.live_release_enabled = true; }\nif (!CFG.dry_run && !CFG.live_release_enabled) return [{json:{ok:false,stop:true,no_action:true,verdict:'held_live_release_not_accepted'}}];\nconst need = ['seat', 'case_id', 'group_key', 'approver'];\nconst missing = need.filter(k => !b[k] || typeof b[k] !== 'string');\nif (missing.length) return [{ json: { ok: false, verdict: 'invalid_input', missing, stop: true } }];\nif (!['A', 'B', 'C', 'D'].includes(b.seat)) return [{ json: { ok: false, verdict: 'invalid_input', detail: 'seat', stop: true } }];\nconst X = { seat: b.seat, case_id: b.case_id, group_key: b.group_key, approver: b.approver.slice(0, 40), asset_id: b.asset_id || 'haedam-portal', cfg: CFG, reason: b.reason ? String(b.reason).slice(0, 200) : null };\nreturn [{ json: { mode: 'check', seat: b.seat, group_key: b.group_key, ctx: X, stop: false } }];\n"
     }
    },
    {

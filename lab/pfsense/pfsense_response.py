@@ -18,6 +18,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 
 TARGETS = frozenset({'203.0.113.22'})
@@ -139,6 +140,14 @@ class PfSenseBackend:
         p = self.run(['/usr/local/bin/easyrule', action, 'wan', target], timeout=30)
         if p.returncode != 0:
             raise BackendError('easyrule_exit_failed')
+        # easyrule returns before the filter reload loads the table (~2 s measured 11/09 on CE 2.7.2), so an
+        # immediate read-back saw "not applied". Wait for the runtime table only; the controller still verifies.
+        for _ in range(30):
+            shown = self.run(['/sbin/pfctl', '-t', TABLE, '-T', 'show'])  # fails until the table exists
+            present = shown.returncode == 0 and target in shown.stdout.split()
+            if present == (action == 'block'):
+                return
+            time.sleep(0.5)
 
     def kill_states(self, target):
         p = self.run(['/sbin/pfctl', '-k', target])

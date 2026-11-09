@@ -43,6 +43,14 @@ def notification_url(raw, base):
     return out
 
 
+def live_body(raw, live):
+    """--live: n8n mains act only when the body carries boolean dry_run:false and store_real:true."""
+    out = copy.deepcopy(raw)
+    if live:
+        out["config"]["body_template"] = '{"dry_run":false,"store_real":true,' + raw["config"]["body_template"].lstrip()[1:]
+    return out
+
+
 def pipeline_parts(text):
     """Split a .txt export into (pipeline source, [rule sources]). The pipeline lives in `// ` comment lines."""
     m = re.search(r"^// (pipeline .*?^// end)", text, re.S | re.M)
@@ -76,6 +84,7 @@ class Graylog:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:9000")
+    ap.add_argument("--live", action="store_true", help="alerts make n8n block and record tickets (default: observe)")
     args = ap.parse_args()
     gl = Graylog(args.url, os.environ["GRAYLOG_ADMIN_PASSWORD"])
     key = os.environ["N8N_WEBHOOK_KEY"]
@@ -137,15 +146,19 @@ def main():
     allow["disabled"] = False
     gl.call("PUT", "/api/system/urlwhitelist", allow)
 
-    notes = {n["title"]: n["id"] for n in gl.call("GET", "/api/events/notifications?per_page=100")["notifications"]}
+    notes = {n["title"]: n for n in gl.call("GET", "/api/events/notifications?per_page=100")["notifications"]}
     note_ids = {}
     for name, path in NOTIFICATIONS.items():
-        raw = notification_url(json.loads((ROOT / path).read_text("utf-8")), N8N)
+        raw = live_body(notification_url(json.loads((ROOT / path).read_text("utf-8")), N8N), args.live)
         raw["config"]["headers"] = f"X-Haedam-Key:{key}"  # n8n webhooks use Header Auth with this name
         if raw["title"] not in notes:
-            notes[raw["title"]] = gl.call("POST", "/api/events/notifications", raw)["id"]
+            note_ids[name] = gl.call("POST", "/api/events/notifications", raw)["id"]
             created += 1
-        note_ids[name] = notes[raw["title"]]
+            continue
+        note_ids[name] = notes[raw["title"]]["id"]
+        if notes[raw["title"]]["config"].get("body_template") != raw["config"]["body_template"]:
+            gl.call("PUT", f"/api/events/notifications/{note_ids[name]}", {**raw, "id": note_ids[name]})
+    print("mode:", "live (dry_run:false, store_real:true)" if args.live else "observe (n8n defaults)")
 
     defs = {d["title"] for d in gl.call("GET", "/api/events/definitions?per_page=100")["event_definitions"]}
     for path, note in DEFINITIONS.items():
