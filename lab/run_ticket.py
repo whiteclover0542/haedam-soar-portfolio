@@ -16,9 +16,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = {"S1": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22"}
-WINDOW_MIN = {"S1": 30, "S8": 15, "S10": 15}
-SEAT = {"S1": "A", "S8": "B", "S10": "B"}
+SRC = {"S1": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11"}
+WINDOW_MIN = {"S1": 30, "S8": 15, "S10": 15, "H1": 10}
+SEAT = {"S1": "A", "S8": "B", "S10": "B", "H1": "A"}
+H1_POSTS = 8  # 탐지 기준 N=5보다 넉넉히(초안). 기준선은 --baseline
+RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting")
 NORMAL = "203.0.113.100"
 TICKETS = "http://127.0.0.1:8089/api/v1/tickets"
 
@@ -71,6 +73,15 @@ def http_code(container, src, path="/api/v1/health"):
               "--max-time", "5", "http://203.0.113.1" + path, check=False) or "000"
 
 
+def portal_posting(e, username, restricted):
+    """Person's release for H1 (and cleanup): the response API from n8n's address, like the workflows call it."""
+    js = ("fetch('http://10.250.0.2:5000/api/v1/response/accounts/posting',{method:'POST',headers:{'X-Response-Key':process.env.K,"
+          "'Idempotency-Key':process.env.I,'Content-Type':'application/json'},body:JSON.stringify({username:process.env.U,restricted:"
+          + ("true" if restricted else "false") + "})}).then(r=>console.log(r.status))")
+    return sh("docker", "exec", "haedam-n8n", "node", "-e", js,
+              env_vars={"K": e["PORTAL_RESPONSE_KEY"], "I": f"run-ticket-{username}-{int(restricted)}", "U": username})
+
+
 def portal_blocked(e):
     js = ("fetch('http://10.250.0.2:5000/api/v1/response/ips',{headers:{'X-Response-Key':process.env.K}})"
           ".then(r=>r.json()).then(j=>console.log(JSON.stringify(j.data.items.map(i=>i.ip))))")
@@ -120,6 +131,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("case", choices=SRC)
     ap.add_argument("--restore", action="store_true")
+    ap.add_argument("--baseline", action="store_true", help="H1: normal citizen pace (3 posts, 2 min apart); expects no ticket")
     a = ap.parse_args()
     case, src, e = a.case, SRC[a.case], env()
     now = datetime.now(timezone.utc)
@@ -131,8 +143,23 @@ def main():
         raise SystemExit("precheck: " + ", ".join(problems))
 
     run = {"case": case, "src": src, "run_id": now.strftime("%m%d%H%M%S")}
-    before = set(tickets_for(src if case != "S1" else "__none__"))  # S1 uses a fresh username each run
-    if case == "S1":
+    before = set(tickets_for(src if case not in ("S1", "H1") else "__none__"))  # S1/H1 use a fresh username each run
+    if case == "H1":
+        user, pw = f"zz_a_h1_{run['run_id']}", secrets.token_urlsafe(12)
+        who, at = ("haedam-normal", NORMAL) if a.baseline else ("haedam-attacker", src)
+        run["src"], run["baseline"] = at, a.baseline or None
+        run["register"] = portal_login(who, at, "register", user, pw=pw)["statuses"]
+        run["input_at"] = datetime.now(timezone.utc).isoformat()
+        if a.baseline:
+            run["input"] = []
+            for i in range(3):  # a busy but normal citizen: 3 petitions, 2 minutes apart
+                run["input"].append(portal_login(who, at, "post", user, "1", pw=pw)["statuses"][0])
+                if i < 2:
+                    time.sleep(120)
+        else:
+            run["input"] = portal_login(who, at, "post", user, str(H1_POSTS), pw=pw)
+        group_key = user
+    elif case == "S1":
         user, pw = f"zz_a_s1_{run['run_id']}", secrets.token_urlsafe(12)
         run["register"] = portal_login("haedam-normal", NORMAL, "register", user, pw=pw)["statuses"]
         run["input_at"] = datetime.now(timezone.utc).isoformat()
@@ -148,13 +175,18 @@ def main():
     print("input", run["input"], flush=True)
 
     ticket = find_ticket(case, group_key, before)
-    if not ticket:
+    if a.baseline:  # pass = no ticket for a normal pace (false positive otherwise)
+        run.update(ticket_id=ticket["ticket_id"] if ticket else None, result="fail" if ticket else "pass",
+                   reason="false positive: ticket for normal pace" if ticket else None)
+        if ticket:
+            portal_posting(e, group_key, False)  # do not leave the citizen restricted
+    elif not ticket:
         run.update(result="fail", reason="no ticket within 180s")
     else:
         time.sleep(5)  # let the response actions land
         ticket = get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]
         acts = [(x["via"], x["action"], x["result"], x.get("finished_at")) for x in ticket.get("actions", [])]
-        blocked = [x for x in acts if x[1] in ("block", "fw_block") and x[2] in ("applied", "already_applied")]
+        blocked = [x for x in acts if x[1] in RESPONSE_ACTIONS and x[2] in ("applied", "already_applied")]
         det = ts(ticket.get("detected_at"))
         run.update(ticket_id=ticket["ticket_id"], status=ticket["status"], actions=acts,
                    mttd_s=mttd(ts(ticket["condition_met_at"]), det) if ticket.get("condition_met_at") and det else None,
@@ -162,9 +194,19 @@ def main():
                    # Graylog evaluates every 60 s, so this (input → last block applied) is the end-to-end number.
                    input_to_block_s=round(max((ts(x[3]) - ts(run["input_at"])).total_seconds() for x in blocked), 3) if blocked else None,
                    effect={"attacker": http_code("haedam-attacker", src), "normal": http_code("haedam-normal", NORMAL)})
+        if case == "H1":
+            again = portal_login("haedam-attacker", src, "post", group_key, "1", pw=pw)
+            other, other_pw = f"zz_a_h1n_{run['run_id']}", secrets.token_urlsafe(12)
+            portal_login("haedam-normal", NORMAL, "register", other, pw=other_pw)
+            run["effect"] = {"attacker": str(again["statuses"][0]), "attacker_login": again["login"], "attacker_list": again["list"],
+                             "normal": str(portal_login("haedam-normal", NORMAL, "post", other, "1", pw=other_pw)["statuses"][0])}
         if case == "S1":
             run["effect"]["normal_login_same_user"] = portal_login("haedam-normal", NORMAL, "login", group_key, pw=pw)["statuses"]
-        if a.restore:
+        if a.restore and case == "H1":
+            run["restore"] = {"verdict": "released_by_person", "steps": [(1, portal_posting(e, group_key, False))],
+                              "attacker_after": str(portal_login("haedam-attacker", src, "post", group_key, "1", pw=pw)["statuses"][0]),
+                              "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"]}
+        elif a.restore:
             body = json.dumps({"seat": SEAT[case], "case_id": ticket["case_id"], "group_key": group_key, "approver": "run_ticket",
                                "dry_run": False, "reason": "lab run restore"}).encode()
             req = urllib.request.Request("http://127.0.0.1:5678/webhook/haedam-release", data=body, method="POST",
@@ -175,9 +217,10 @@ def main():
             run["restore"] = {"verdict": rel.get("verdict"), "steps": [(s.get("step"), s.get("result")) for s in rel.get("steps") or []],
                               "attacker_after": http_code("haedam-attacker", src),
                               "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"]}
-        ok = bool(blocked) and run["effect"]["attacker"] in ("403", "000") and run["effect"]["normal"] == "200"
+        refused, fine = (("429",), "201") if case == "H1" else (("403", "000"), "200")
+        ok = bool(blocked) and run["effect"]["attacker"] in refused and run["effect"]["normal"] == fine
         if a.restore:
-            ok = ok and run["restore"]["attacker_after"] == "200"
+            ok = ok and run["restore"]["attacker_after"] == fine
         run["result"] = "pass" if ok else "fail"
     out = ROOT / f"docs/tickets/{case}/runs.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)

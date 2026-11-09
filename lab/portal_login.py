@@ -3,6 +3,7 @@
 python portal_login.py --source 203.0.113.100 register USER   # password from env PW
 python portal_login.py --source 203.0.113.11 fail USER 9       # random wrong passwords, never printed
 python portal_login.py --source 203.0.113.100 login USER       # password from env PW
+python portal_login.py --source 203.0.113.11 post USER 8        # log in (env PW), then file N petitions (H1)
 Prints one JSON line: the HTTP status of every request. Bodies, cookies and passwords are never printed.
 """
 import argparse
@@ -51,12 +52,23 @@ class Session:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", required=True)
-    ap.add_argument("mode", choices=["register", "fail", "login"])
+    ap.add_argument("mode", choices=["register", "fail", "login", "post"])
     ap.add_argument("username")
     ap.add_argument("count", nargs="?", type=int, default=1)
     a = ap.parse_args()
     s = Session(a.source)
     out = {"csrf": s.csrf(), "statuses": []}
+    if a.mode == "post":
+        status, raw = s.call("POST", "/api/v1/auth/login", {"username": a.username, "password": os.environ["PW"]})
+        out["login"] = status
+        if status == 200:
+            s.token = json.loads(raw)["data"]["csrf_token"]
+        for i in range(a.count):
+            body = {"title": f"실습 민원 {i + 1}번 확인 요청", "content": "H1 실습용 합성 민원입니다. 처리하지 않아도 됩니다.", "category": "기타"}
+            out["statuses"].append(s.call("POST", "/api/v1/petitions", body)[0])
+        out["list"] = s.call("GET", "/api/v1/petitions")[0]
+        print(json.dumps(out))
+        return
     for _ in range(a.count):
         if a.mode == "register":
             body = {"username": a.username, "display_name": "실습계정", "password": os.environ["PW"]}
