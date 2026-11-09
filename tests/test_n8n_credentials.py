@@ -50,3 +50,11 @@ def test_h1_workflows_derived():
     assert "restrict_posting" in text and "'112'" not in text
     sub_text = json.dumps(sub, ensure_ascii=False)
     assert "/api/v1/response/accounts/posting" in sub_text and "restricted: true" in sub_text and "/accounts/lock" not in sub_text
+
+
+def test_discord_is_optional_and_wired_when_set():
+    assert "discordWebhookApi" not in {c["type"] for c in build_credentials(ENV)}
+    creds = build_credentials({**ENV, "DISCORD_WEBHOOK_URL": "https://example.invalid/webhook"})
+    w = attach_credentials(load(Path("infra/n8n/workflows/haedam-11-discord-notify.json")), creds)
+    node = next(n for n in w["nodes"] if n["type"] == "n8n-nodes-base.discord")
+    assert node["credentials"]["discordWebhookApi"]["id"] in {c["id"] for c in creds}

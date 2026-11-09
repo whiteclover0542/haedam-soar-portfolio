@@ -11,6 +11,7 @@ HTTP_HEADER_AUTH = {"haedamResultLog01": "ticket-store (C)",
                     "haedamPortalIp01": "haedam-portal-response",
                     "haedamAccountLock01": "haedam-portal-response",
                     "haedamPortalPosting01": "haedam-portal-response"}
+DISCORD = "Discord Webhook account"
 
 
 def _id(name):
@@ -31,6 +32,9 @@ def build_credentials(env):
               {"id": _id("haedam-pf-response D"), "name": "haedam-pf-response D", "type": "sshPrivateKey",
                "data": {"host": "10.250.0.1", "port": 22, "username": "admin",
                         "privateKey": need("PF_SSH_PRIVATE_KEY"), "passphrase": ""}}]
+    if env.get("DISCORD_WEBHOOK_URL"):  # optional: without it haedam-11 reports sent:false and the response goes on
+        creds.append({"id": _id(DISCORD), "name": DISCORD, "type": "discordWebhookApi",
+                      "data": {"webhookUri": env["DISCORD_WEBHOOK_URL"]}})
     return creds
 
 
@@ -41,6 +45,8 @@ def attach_credentials(workflow, creds):
         for ref in (node.get("credentials") or {}).values():
             if ref.get("name") in by_name:
                 ref["id"] = by_name[ref["name"]]["id"]
+        if node["type"] == "n8n-nodes-base.discord" and DISCORD in by_name:
+            node["credentials"] = {"discordWebhookApi": {"id": by_name[DISCORD]["id"], "name": DISCORD}}
         target = HTTP_HEADER_AUTH.get(w.get("id"))
         if target and node["type"].endswith("httpRequest") and node["parameters"].get("genericAuthType") == "httpHeaderAuth":
             node["credentials"] = {"httpHeaderAuth": {"id": by_name[target]["id"], "name": target}}
