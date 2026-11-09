@@ -1,0 +1,46 @@
+{
+  "source_repository": "NoBugs-Aleph/aleph-soar-capstone",
+  "captured_date": "2026-10-19",
+  "source_rules_commit": "5e79d461d71e5f70c4daf0288572624a0962f817",
+  "source_rules_status": "committed_reference",
+  "rule_id": "haedam-rules-2026-10-19-v3",
+  "canonical_rules_path": "docs/haedam/PROJECT-RULES.md",
+  "hash_normalization": "UTF-8 LF",
+  "canonical_rules_sha256": "8eb43f6f58c58f61d4ee8af7b203c0a937227516682b602bc5649e6c0e9d0061",
+  "contract_commit": "d134c71a6a9ae941c149c969ca42884348197eba",
+  "contract_file_sha256": {
+    "docs/haedam/PORTAL-API.md": "e5496925fd29730da5e775a9ead6f64b9f145d4f90760b80733403b4fc7a0ecc",
+    "docs/haedam/ADMIN-USERS-API.md": "3812aad3cf6b97516a256d454e70ad6c9624e92e6c4e904afad2df34ebcaa2dd",
+    "contracts/portal-admin-users.schema.json": "5066dd78451cca70287a184a65298cb60c687603f426c352720403bac501cfc0",
+    "contracts/portal-examples/admin-users-filtered.json": "3fa2681860243cca7ed0c034173be25b3f08cb9fd67c0f3a4daf70ad02d606d2",
+    "contracts/portal-event.schema.json": "a173859f4b287d9c311e529349b03c8010f489720fc301212d2cd932d759ca42",
+    "contracts/portal-examples/flow.json": "ef343793bdfe389997f1663e0c046dcdebf047270c199b6874bac71c7866f483",
+    "contracts/portal-error.schema.json": "685bdcf87c6645d8e1a19d3338866480445d3030f446aee409e1625b13d0fb20",
+    "contracts/portal-examples/validation-error.json": "e3fd832bf5604ec830275cd5604a4fd072f480f6d31148df8caa5d4da64ae492"
+  },
+  "initial_scaffold_snapshot": {
+    "source_repository": "NoBugs-Aleph/aleph-soar-capstone",
+    "captured_date": "2026-10-19",
+    "base_head_commit": "9f1bfbdac210eda00ada25c84aa0c27dfc993339",
+    "source_rules_commit": null,
+    "source_rules_status": "uncommitted_working_tree_snapshot_not_present_in_base_head",
+    "rule_id": "haedam-rules-2026-10-19-v2",
+    "canonical_rules_path": "docs/haedam/PROJECT-RULES.md",
+    "canonical_rules_sha256": "bf4e22a5e3241710c59198b49e90c27e58fa0f07e363aed708f2257852802370",
+    "template_path": "scaffolds/haedam-portal-frontend",
+    "template_file_sha256": {
+      ".gitignore": "68186dfdf5febc62d2b141ec1751c7f5da704583509bce3b60ba170fbc3704d4",
+      "AGENTS.md": "b84a5e31e5e4feff1aaf1c028492ff4a61c2e3922be260c034bfeb4a5b3eb265",
+      "CLAUDE.md": "f2373004b7686556d45b894bc5bb973bedf05ab21be0a9fd904b93992abddd7c",
+      "CODEX.md": "4d3cfcccfd4da8ad92c22df5adf5fb56d96e84683c663ca6c1cdc92011e2c8af",
+      "contracts/README.md": "abf5fb8ccea183323eb533cb04d0dcfdddd86a73d27f305ba67a13e81821c5d9",
+      "docs/PROJECT-RULES.md": "bf4e22a5e3241710c59198b49e90c27e58fa0f07e363aed708f2257852802370",
+      "README.md": "604c8bc14ce3022c660361952c0e938ac22886cd4f9d632d9aa069c20d2309df",
+      "src/api/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "src/components/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "src/pages/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "src/styles/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

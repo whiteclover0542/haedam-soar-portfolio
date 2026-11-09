@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nobugs:aleph:pfsense-response:1.0",
+  "title": "S10 restricted SSH response tool output v1.0 (not deployed)",
+  "description": "JSON stdout of haedam-pf-response. Rule/table verification is distinct from traffic effect. This is not an HTTP API or an automatically connected n8n workflow.",
+  "type": "object", "additionalProperties": false,
+  "required": ["ok", "result", "reason"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "result": {"enum": ["status", "applied", "already_applied", "released", "rejected", "failed"]},
+    "reason": {"type": "string", "pattern": "^[a-z_]+$"},
+    "schema_version": {"const": "1.0"}, "via": {"const": "pfsense"},
+    "action": {"enum": ["status", "block", "unblock"]}, "target": {"const": "203.0.113.22"},
+    "request_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"},
+    "owner_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"},
+    "changed": {"type": ["boolean", "null"]}, "replayed": {"type": "boolean"},
+    "applied_verified": {"type": ["boolean", "null"]}, "effect_verified": {"type": "null"},
+    "requested_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "state": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["ready", "configured", "table_present", "rule_present", "covered_by_network"],
+      "properties": {
+        "ready": {"type": "boolean"}, "configured": {"type": "boolean"},
+        "table_present": {"type": "boolean"}, "rule_present": {"type": "boolean"},
+        "covered_by_network": {"type": "boolean"}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"ok": {"const": true}}},
+     "then": {"required": ["schema_version", "via", "action", "target", "request_id", "owner_id", "changed", "replayed", "applied_verified", "effect_verified", "state", "requested_at", "finished_at"]}}
+  ]
+}

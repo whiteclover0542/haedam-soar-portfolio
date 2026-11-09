@@ -1,0 +1,11 @@
+.env
+*.qcow2
+*.iso
+*.iso.gz
+.venv/
+__pycache__/
+node_modules/
+dist/
+instance/
+.pytest_cache/
+.superpowers/
