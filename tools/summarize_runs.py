@@ -16,8 +16,9 @@ RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting")
 # What the attacker / the normal user should get while the response is in force.
 REFUSED = {"H1": ("429",)}
 NORMAL_OK = {"H1": "201"}
-# S10 runs started after this got both pfSense fixes (read-after-apply, release verdict); other tickets do not use pfSense. See journal 2026-11-09.
-FIXED_AT = "2026-11-09T03:46:00+00:00"
+# Runs from before a fix are left out of the "fixed" row. S10: pfSense read-after-apply and release verdict.
+# H1: the ticket store rejected case_id H1. See journal 2026-11-09.
+FIXED_AT = {"S10": "2026-11-09T03:46:00+00:00", "H1": "2026-11-09T06:56:00+00:00"}
 
 
 def _ts(t):
@@ -42,6 +43,11 @@ def input_to_block(r):
     return round(max((_ts(t) - _ts(r["input_at"])).total_seconds() for t in done), 3) if done else None
 
 
+def restored(r):
+    """After release the attacker gets what a normal user gets (H1: can post again)."""
+    return (r.get("restore") or {}).get("attacker_after") == NORMAL_OK.get(r["case"], "200")
+
+
 def _median(values):
     values = [v for v in values if v is not None]
     return round(median(values), 3) if values else None
@@ -54,9 +60,9 @@ def _stats(all_rows):
     return {"runs": len(rows),
             "auto_ok": sum(map(auto_ok, rows)),
             "auto_rate": sum(map(auto_ok, rows)) / len(rows) if rows else None,
-            "restore_ok": sum((r["restore"] or {}).get("attacker_after") == "200" for r in tried),
+            "restore_ok": sum(map(restored, tried)),
             "restore_tried": len(tried),
-            "restore_rate": sum((r["restore"] or {}).get("attacker_after") == "200" for r in tried) / len(tried) if tried else None,
+            "restore_rate": sum(map(restored, tried)) / len(tried) if tried else None,
             "normal_fail_runs": sum((r.get("effect") or {}).get("normal") not in (None, NORMAL_OK.get(r["case"], "200")) for r in rows),
             "baseline_runs": len(baseline),
             "false_positives": sum(bool(r.get("ticket_id")) for r in baseline),
@@ -68,7 +74,7 @@ def _stats(all_rows):
 def summarize(rows):
     out = {c: _stats([r for r in rows if r["case"] == c]) for c in sorted({r["case"] for r in rows})}
     out["total"] = _stats(rows)
-    out["fixed"] = _stats([r for r in rows if r["case"] != "S10" or _ts(r["input_at"]) >= _ts(FIXED_AT)])
+    out["fixed"] = _stats([r for r in rows if r["case"] not in FIXED_AT or _ts(r["input_at"]) >= _ts(FIXED_AT[r["case"]])])
     return out
 
 
@@ -81,14 +87,14 @@ def run_table(rows):
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for i, r in enumerate(rows, 1):
         eff = r.get("effect") or {}
-        lines.append(f"| {i} | {r['input_at'][:19].replace('T', ' ')} | {r.get('ticket_id') or '—'} | {r.get('result')} | "
+        lines.append(f"| {i} | {r['input_at'][:19].replace('T', ' ')} | {r.get('ticket_id') or '—'} | {r.get('result')}{' (기준선)' if r.get('baseline') else ''} | "
                      f"{'예' if auto_ok(r) else '아니요'} | {_fmt(r.get('mttd_s'), '초')} | {_fmt(r.get('detect_to_block_s'), '초')} | "
                      f"{_fmt(input_to_block(r), '초')} | {eff.get('attacker', '—')} / {eff.get('normal', '—')} | "
                      f"{(r.get('restore') or {}).get('attacker_after', '—')} |")
     return "\n".join(lines)
 
 
-LABEL = {"total": "전체", "fixed": "수정 후(S10 1·2회차 제외)"}
+LABEL = {"total": "전체", "fixed": "수정 후(S10 1·2회차, H1 1~3회차 제외)"}
 
 
 def summary_table(s):
