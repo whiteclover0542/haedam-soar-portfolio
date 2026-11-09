@@ -16,6 +16,9 @@ volumes:
   pfsense-data:
   portal-db:
   ticket-data:
+  mongo-data:
+  opensearch-data:
+  graylog-data:
 
 services:
   # ── 서버: 포털(원작 반소람)·MySQL·티켓 저장소(원작 김상혁) ──
@@ -66,6 +69,58 @@ services:
     ports: ["127.0.0.1:8089:8089"]   # 대시보드만. n8n API 8088은 lan 안에서만
     volumes: [ticket-data:/data]
     mem_limit: 256m
+    restart: unless-stopped
+
+  # ── Graylog (원작 compose·규칙: 김대훈·김명준, 단일 PC 조정: 반소람). 설정 반입: infra/graylog/bootstrap.py ──
+  mongodb:
+    image: mongo:6.0.28
+    container_name: haedam-mongodb
+    profiles: [soc]
+    networks:
+      lan: {ipv4_address: 10.250.0.102}
+    volumes: [mongo-data:/data/db]
+    mem_limit: 512m
+    restart: unless-stopped
+
+  opensearch:
+    image: opensearchproject/opensearch:2.5.0   # 2.15는 색인 오류(팀 수업 메모)
+    container_name: haedam-opensearch
+    profiles: [soc]
+    environment:
+      OPENSEARCH_JAVA_OPTS: -Xms768m -Xmx768m
+      discovery.type: single-node
+      action.auto_create_index: "false"
+      plugins.security.disabled: "true"
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 65536, hard: 65536}
+    networks:
+      lan: {ipv4_address: 10.250.0.101}
+    volumes: [opensearch-data:/usr/share/opensearch/data]
+    mem_limit: 1536m
+    restart: unless-stopped
+
+  graylog:
+    image: graylog/graylog:6.1.16
+    container_name: haedam-graylog
+    profiles: [soc]
+    depends_on: [mongodb, opensearch]
+    environment:
+      GRAYLOG_PASSWORD_SECRET: ${GRAYLOG_PASSWORD_SECRET:?.env}
+      GRAYLOG_ROOT_PASSWORD_SHA2: ${GRAYLOG_ROOT_PASSWORD_SHA2:?.env}
+      GRAYLOG_HTTP_EXTERNAL_URI: http://127.0.0.1:9000/
+      GRAYLOG_MONGODB_URI: mongodb://10.250.0.102:27017/graylog
+      GRAYLOG_ELASTICSEARCH_HOSTS: http://10.250.0.101:9200
+      GRAYLOG_ROOT_TIMEZONE: Asia/Seoul
+      GRAYLOG_SERVER_JAVA_OPTS: -Xms1g -Xmx1g
+    # 입력(GELF TCP 12201·Syslog UDP 1514·Raw TCP 5514)은 lan에서 직접 받으므로 호스트에 열지 않는다.
+    networks:
+      lan: {ipv4_address: 10.250.0.100}
+    ports: ["127.0.0.1:9000:9000"]
+    volumes:
+      - graylog-data:/usr/share/graylog/data/journal
+      - ./infra/graylog/lookup:/usr/share/graylog/data/lookup:ro
+    mem_limit: 1536m
     restart: unless-stopped
 
   # ── pfSense (원작 규칙·도구: 김명준, 컨테이너화: 반소람) ──

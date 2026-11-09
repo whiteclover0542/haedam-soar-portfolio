@@ -119,7 +119,7 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 - [x] **4단계:** 웹(127.0.0.1:8443)에서 다음을 설정한다.
   - 포트 포워드 WAN:80→10.250.0.2:5000
   - WAN 차단 기본 규칙 로깅 켜기
-  - 원격 syslog 10.250.0.100:514 UDP(filter 로그)
+  - 원격 syslog 10.250.0.100:1514 UDP(filter 로그, Graylog 입력 포트. 11/09 514에서 변경)
   - SSH 켜기
   - `lab/pfsense/INSTALL.md`(김명준) 순서대로 도구 설치, `haedam-pf` 계정과 공개키 등록
 - [x] **5단계(스파이크 판정):** 다음을 확인한다. 하나라도 실패하면 설계 4-3의 대체안으로 바꾸고 저널에 원인을 적는다.
@@ -196,14 +196,14 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - `test_replace_stream_ids`: s10 정의 → `streams == [ids['haedam-portal'], ids['pfsense']]`, 결과 JSON에 `REPLACE_` 문자열이 없음
   - `test_notification_url_rewritten`: `host.docker.internal` 주소가 `http://10.250.0.103:5678/webhook/haedam-s8-s10`로 바뀜
 - [x] **2단계:** `python -m pytest tests/test_graylog_bootstrap.py -v` → FAIL
-- [ ] **3단계:** `bootstrap.py`를 구현한다. `urllib.request`만 쓰고 헤더는 `X-Requested-By: bootstrap`이다. 이벤트 정의는 `POST /api/events/definitions?schedule=true`로 넣는다.
+- [x] **3단계:** `bootstrap.py`를 구현한다. `urllib.request`만 쓰고 헤더는 `X-Requested-By: bootstrap`이다. 이벤트 정의는 `POST /api/events/definitions?schedule=true`로 넣는다.
 - [x] **4단계:** 같은 명령으로 PASS를 확인한다.
-- [ ] **5단계:** 실제 기동 후 bootstrap을 실행하고 다음을 확인한다.
+- [x] **5단계:** 실제 기동 후 bootstrap을 실행하고 다음을 확인한다.
   - `normal`에서 포털 요청 1건을 보내면 Search `source:haedam-portal`에 1건이 뜬다.
   - Task 1의 ping 1건이 `rule:"pfsense-block"`으로 정규화돼 보인다.
   - bootstrap을 두 번째 실행하면 "생성 0" 출력
-- [ ] **6단계:** `System > Content Packs > Create`로 입력·스트림·파이프라인·이벤트·알림을 묶어 `content-pack.json`으로 저장한다. 수동 업로드 경로로도 쓸 수 있다.
-- [ ] **7단계:** 커밋한다. `feat(graylog): 단일 PC 구성, 탐지 설정 bootstrap·콘텐츠 팩`
+- [ ] **6단계(생략, 11/09):** 알림 헤더에 n8n 웹훅 키가 들어가 내보내면 비밀값이 남고, bootstrap과 내용이 겹친다. `System > Content Packs > Create`로 입력·스트림·파이프라인·이벤트·알림을 묶어 `content-pack.json`으로 저장한다. 수동 업로드 경로로도 쓸 수 있다.
+- [x] **7단계:** 커밋한다. `feat(graylog): 단일 PC 구성, 탐지 설정 bootstrap·콘텐츠 팩`
 
 ### Task 4: n8n 워크플로·자격 증명 반입
 
@@ -245,8 +245,8 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 - MVP에서는 구동과 접속만 확인한다. Graylog 연동은 S7 단계에서 한다.
 
 - [x] **1단계:** compose·인증서 생성 설정을 쓴다. 인증서는 `docker compose -f infra/wazuh/generate-certs.yml run --rm generator`로 만들고, `infra/wazuh/config/wazuh_indexer_ssl_certs/`는 `.gitignore`에 넣는다.
-- [ ] **2단계:** `up -d` 뒤 3분 안에 `curl -k -u wazuh-wui:$WAZUH_API_PASSWORD https://<manager>:55000/security/user/authenticate`(n8n 컨테이너 안에서 실행)이 토큰을 반환하고, 대시보드 로그인이 되는지 확인한다.
-- [ ] **3단계:** 커밋한다. `feat(wazuh): single-node 4.9.2 단일 PC 구성`
+- [x] **2단계:** `up -d` 뒤 3분 안에 `curl -k -u wazuh-wui:$WAZUH_API_PASSWORD https://<manager>:55000/security/user/authenticate`(n8n 컨테이너 안에서 실행)이 토큰을 반환하고, 대시보드 로그인이 되는지 확인한다.
+- [x] **3단계:** 커밋한다. `feat(wazuh): single-node 4.9.2 단일 PC 구성`
 
 ### Task 6: 최상위 compose·.env.example·동시 기동 검증
 

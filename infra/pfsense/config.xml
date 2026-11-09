@@ -128,7 +128,7 @@
 		<logcompressiontype>none</logcompressiontype>
 		<format>rfc3164</format>
 		<rotatecount></rotatecount>
-		<remoteserver>10.250.0.100:514</remoteserver>
+		<remoteserver>10.250.0.100:1514</remoteserver>
 		<remoteserver2></remoteserver2>
 		<remoteserver3></remoteserver3>
 		<sourceip></sourceip>

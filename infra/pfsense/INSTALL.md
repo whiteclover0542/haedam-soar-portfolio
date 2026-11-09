@@ -33,7 +33,7 @@ https://127.0.0.1:8443 (포트를 빼면 다른 서비스로 간다), 첫 로그
 
 - 설정 마법사: Timezone `Asia/Seoul`. WAN 페이지 맨 아래 **Block RFC1918**과 **Block bogon**의 체크를 둘 다 푼다(203.0.113.0/24는 bogon 목록에 있다). admin 비밀번호를 새로 정하고 `.env`의 `PFSENSE_ADMIN_PASSWORD`에 적는다.
 - Firewall → NAT → Port Forward: WAN, TCP, WAN address:80 → `10.250.0.2:5000`, Add associated filter rule
-- Status → System Logs → Settings: Log default blocks 체크, Remote Logging `10.250.0.100:514`, Firewall Events만 체크
+- Status → System Logs → Settings: Log default blocks 체크, Remote Logging `10.250.0.100:1514`(Graylog Syslog UDP 입력), Firewall Events만 체크
 - System → Advanced → Admin Access: Enable Secure Shell
 
 [config.xml](config.xml)은 위 설정을 마친 상태를 내보낸 것이다. 비밀번호 해시·SSH 키·인증서는 자리표시로 바꿨으므로, 복원에 쓰려면 그 값을 다시 설정해야 한다.
