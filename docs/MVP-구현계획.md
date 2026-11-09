@@ -291,23 +291,23 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 - 창 길이: S1 30분, S8·S10 15분
 - 출발지: S1 `203.0.113.11`, S8 `.21`, S10 `.22`
 
-- [ ] **1단계:** 실패하는 테스트를 쓴다.
+- [x] **1단계:** 실패하는 테스트를 쓴다.
   - `test_window_blocks_rerun_within_15min`: `window_blocked(now-10분, now, 15) == 300`
   - `test_window_allows_after`: `window_blocked(now-16분, now, 15) is None`
   - `test_precheck_flags_leftover`: `precheck(['203.0.113.22'], [], '203.0.113.22') == ['portal_block_left:203.0.113.22']`
   - `test_precheck_flags_pf_leftover`: `precheck([], ['203.0.113.22'], '203.0.113.22') == ['pf_block_left:203.0.113.22']`
   - `test_mttd_seconds`: 시각 차 49.281초 → `49.281`
-- [ ] **2단계:** `python -m pytest tests/test_run_ticket.py -v` → FAIL
-- [ ] **3단계:** `run_ticket.py`를 구현한다. HTTP는 `urllib.request`, 컨테이너 실행은 `subprocess.run(['docker','exec',...])`를 쓴다.
-- [ ] **4단계:** 같은 명령으로 PASS를 확인한다.
-- [ ] **5단계(S10 실측):** `python lab/run_ticket.py S10 --restore`를 실행하고 다음을 확인한다.
+- [x] **2단계:** `python -m pytest tests/test_run_ticket.py -v` → FAIL
+- [x] **3단계:** `run_ticket.py`를 구현한다. HTTP는 `urllib.request`, 컨테이너 실행은 `subprocess.run(['docker','exec',...])`를 쓴다.
+- [x] **4단계:** 같은 명령으로 PASS를 확인한다.
+- [x] **5단계(S10 실측):** `python lab/run_ticket.py S10 --restore`를 실행하고 다음을 확인한다.
   - 포털 403과 pfSense 차단 중 연결 실패, `normal` 200
   - PF 해제 후 포털 단독 403, 포털 해제 후 200, 티켓 closed
   - MTTD와 탐지→차단 시간을 `docs/tickets/S10/README.md` 표에 적는다(명령·기대 결과·실측·캡처, 비밀값 가림).
-- [ ] **6단계(S8 실측):** `python lab/run_ticket.py S8 --restore`를 실행한다. PF 호출 0, 포털 403 → 해제 → 200을 확인하고 기록한다.
-- [ ] **7단계(S1 실측):** `python lab/run_ticket.py S1 --restore`를 실행한다. 같은 계정 실패 9회 → 탐지 → `.11` 403, `normal`의 같은 계정 로그인 200 → 해제 → 200을 확인하고 기록한다.
-- [ ] **8단계:** 같은 티켓을 출발지 창을 피해 2회씩 더 돌려 3회 값을 표에 적는다. 실패 회차도 실패로 남긴다.
-- [ ] **9단계:** 커밋한다. `feat(lab): 티켓 실행기, S10·S8·S1 단일 PC 실측 기록`
+- [x] **6단계(S8 실측):** `python lab/run_ticket.py S8 --restore`를 실행한다. PF 호출 0, 포털 403 → 해제 → 200을 확인하고 기록한다.
+- [x] **7단계(S1 실측):** `python lab/run_ticket.py S1 --restore`를 실행한다. 같은 계정 실패 9회 → 탐지 → `.11` 403, `normal`의 같은 계정 로그인 200 → 해제 → 200을 확인하고 기록한다.
+- [x] **8단계:** 같은 티켓을 출발지 창을 피해 2회씩 더 돌려 3회 값을 표에 적는다. 실패 회차도 실패로 남긴다.
+- [x] **9단계:** 커밋한다. `feat(lab): 티켓 실행기, S10·S8·S1 단일 PC 실측 기록`
 
 ### Task 8: README와 새 설치 리허설
 
@@ -353,11 +353,11 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - **오탐:** 기준선 입력 회차(`baseline: true` 행)에서 발동한 수
 - `python tools/summarize_runs.py`는 `docs/정량평가.md`의 표를 다시 쓴다.
 
-- [ ] **1단계:** 실패하는 테스트를 쓴다.
+- [x] **1단계:** 실패하는 테스트를 쓴다.
   - `test_rates`: 3회 중 auto_ok 2 → `auto_rate == 2/3`
   - `test_median_ignores_failed`: detected_at이 없는 회차는 MTTD 중앙값에서 빠지고 `runs`에는 포함
-- [ ] **2단계:** `python -m pytest tests/test_summarize_runs.py -v` → FAIL
-- [ ] **3단계:** `statistics.median`으로 구현한다.
-- [ ] **4단계:** 같은 명령으로 PASS를 확인한다.
-- [ ] **5단계:** `docs/정량평가.md`를 작성한다. 이 PC 실측 표와 팀 리포트 수치(자동 대응 8/9·원복 8/8·MTTD 중앙값 51.4초, "팀 공통·4대 분산")를 나란히 두고 차이의 원인(UDP→TCP, 단일 PC 지연 등)을 적는다.
+- [x] **2단계:** `python -m pytest tests/test_summarize_runs.py -v` → FAIL
+- [x] **3단계:** `statistics.median`으로 구현한다.
+- [x] **4단계:** 같은 명령으로 PASS를 확인한다.
+- [x] **5단계:** `docs/정량평가.md`를 작성한다. 이 PC 실측 표와 팀 리포트 수치(자동 대응 8/9·원복 8/8·MTTD 중앙값 51.4초, "팀 공통·4대 분산")를 나란히 두고 차이의 원인(UDP→TCP, 단일 PC 지연 등)을 적는다.
 - [ ] **6단계:** 커밋한다. `feat: 실측 결과 정량평가 요약`

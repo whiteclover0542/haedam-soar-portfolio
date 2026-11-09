@@ -34,7 +34,7 @@ def auto_ok(r):
 
 
 def input_to_block(r):
-    if r.get("input_to_block_s") is not None:
+    if "input_to_block_s" in r:  # present but null = input time unknown; do not reconstruct it
         return r["input_to_block_s"]
     done = [a[3] for a in r.get("actions") or [] if a[1] in RESPONSE_ACTIONS and a[2] in ("applied", "already_applied") and a[3]]
     return round(max((_ts(t) - _ts(r["input_at"])).total_seconds() for t in done), 3) if done else None
