@@ -263,10 +263,10 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - pfSense(`normal`에서 203.0.113.1:80 → 200)
   - 티켓 저장소 check
 
-- [ ] **1단계:** compose와 `.env.example`을 쓴다. `.env`의 필수 값을 하나 지운 상태에서 `docker compose config`를 실행해, 변수 이름이 든 오류로 멈추는지 확인한다(리뷰 중점 5).
-- [ ] **2단계:** `docker compose --profile "*" up -d` 뒤 `python tools/check_stack.py` → 6개 모두 OK. 10분 뒤 `docker stats --no-stream`을 저널에 붙인다(OOM·재시작 0 확인).
-- [ ] **3단계:** 메모리가 부족하면 `mem_limit`를 조정하고 근거를 저널에 적는다. 조정 대상은 OpenSearch heap 1g → 768m, Wazuh indexer 1g → 768m 순서로 한다.
-- [ ] **4단계:** 커밋한다. `feat: 최상위 compose, 5개 구성 동시 기동 점검 도구`
+- [x] **1단계:** compose와 `.env.example`을 쓴다. `.env`의 필수 값을 하나 지운 상태에서 `docker compose config`를 실행해, 변수 이름이 든 오류로 멈추는지 확인한다(리뷰 중점 5).
+- [x] **2단계:** `docker compose --profile "*" up -d` 뒤 `python tools/check_stack.py` → 6개 모두 OK. 10분 뒤 `docker stats --no-stream`을 저널에 붙인다(OOM·재시작 0 확인).
+- [x] **3단계(조정 불필요, 11/09):** 메모리가 부족하면 `mem_limit`를 조정하고 근거를 저널에 적는다. 조정 대상은 OpenSearch heap 1g → 768m, Wazuh indexer 1g → 768m 순서로 한다.
+- [x] **4단계:** 커밋한다. `feat: 최상위 compose, 5개 구성 동시 기동 점검 도구`
 
 ### Task 7: 티켓 실행기와 S10 → S8 → S1 실측
 

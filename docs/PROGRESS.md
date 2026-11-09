@@ -7,7 +7,7 @@
 
 ## 지금 할 일
 
-**Task 1~5 완료.** 다음은 Task 6(최상위 compose 정리·`.env.example`·lab·동시 기동 점검)이다. pfSense 설치 절차와 함정은 [infra/pfsense/INSTALL.md](../infra/pfsense/INSTALL.md)에 있다.
+**Task 1~6 완료.** 다음은 Task 7(티켓 실행기, S10 → S8 → S1 실측)이다. pfSense 설치 절차와 함정은 [infra/pfsense/INSTALL.md](../infra/pfsense/INSTALL.md)에 있다.
 
 **규칙**
 - 두 세션 모두 `compose.yaml`의 자기 서비스 블록만 추가한다.
@@ -38,8 +38,8 @@
 | 2 | 서버(포털·MySQL·티켓 저장소) | ✅ | 빈 볼륨 기동·재시작 `Serving on`, `normal`→pfSense→`/api/v1/health` 200, 호스트 8080 로그인 화면, events.jsonl `src_ip` 203.0.113.100 |
 | 3 | Graylog + 탐지 설정 자동 반입 | ✅ | bootstrap 생성 8 → 재실행 0, 포털 `source:haedam-portal` 검색, `.22` ping → `rule:pfsense-block` 실시각 검색, 정의 3·알림 2(헤더)·허용 목록 2. 콘텐츠 팩은 생략 |
 | 4 | n8n 워크플로·자격 증명 반입 | ✅ | `load.py`로 자격 증명 9·워크플로 19, 웹훅 키 없음/틀림 403·맞음 `no_action`, haedam-01 티켓 저장소 check `ok:true`, haedam-03→14 pfSense status `ok:true` |
-| 5 | Wazuh single-node | ✅ | 세션 2 구현·병합(`f9379a6`, `186c6dd`). 재확인: manager API 토큰 200, 대시보드 302. **Wazuh 기본 비밀번호(`SecretPassword` 등)가 compose에 남아 있음 → 공개 전환(Task 8) 전에 처리** |
-| 6 | 최상위 compose·`.env.example`·동시 기동 점검 | ⬜ | |
+| 5 | Wazuh single-node | ✅ | 세션 2 구현·병합(`f9379a6`, `186c6dd`). 병합에서 빠진 인증서 설정은 Task 6에서 복구, 기본 비밀번호 3개 교체(새 값 200·옛 값 401) |
+| 6 | 최상위 compose·`.env.example`·동시 기동 점검 | ✅ | `docker compose --profile "*"` 14개, `check_stack.py` 6/6 OK, 10분 뒤 재시작 0·OOM 0·여유 4.3GB, 필수 값 비우면 변수 이름 오류 |
 | 7 | 티켓 실행기, S10 → S8 → S1 실측 | ⬜ | |
 | 8 | README·새 설치 리허설·공개 전환 | ⬜ | |
 | 9 | 정량평가 요약 | ⬜ | |
@@ -167,6 +167,7 @@ MVP가 끝난 뒤 단계마다 구현 계획을 따로 쓴다. 아래 세부 작
 | 11/09 | Graylog 알림에 `X-Haedam-Key` 헤더, 콘텐츠 팩 생략 | n8n 웹훅이 Header Auth. 팩으로 내보내면 키가 파일에 남음 |
 | 11/09 | n8n 반입은 `load.py`(계획의 import.ps1 대신), 자격 증명에 고정 ID를 주고 노드에 미리 연결 | 반입 때 연결이 지워지던 팀 문제를 없앰. Python이라 테스트 가능 |
 | 11/09 | n8n 하위 워크플로도 게시, pfSense 확인용 haedam-03 추가 | n8n 2.x는 미게시 하위 워크플로 실행을 거부. haedam-14는 직접 입력을 줄 방법이 없음 |
+| 11/09 | Wazuh 인증서를 볼륨 하나로, 비밀번호는 .env + make_users.py, 교체는 securityadmin | 바인드 마운트 키 권한 문제. 볼륨 삭제는 권한 검사에서 거부돼 무삭제 교체 |
 | 11/09 | 컨테이너 이름에 `haedam-` 접두사 | 다른 프로젝트의 pfSense·Docker와 충돌 방지 |
 
 ## 환경 상태 (학원 PC)
