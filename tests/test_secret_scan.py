@@ -35,3 +35,16 @@ def test_allows_function_call_value(tmp_path):
 
 def test_allows_synthetic_test_literal(tmp_path):
     assert run(tmp_path, 'PASSWORD = "Synthetic-test-password-123"\n').returncode == 0
+
+
+def test_default_mode_handles_korean_filenames(tmp_path):
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / "설계.md").write_text("ok\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    r = subprocess.run([sys.executable, str(SCAN)], cwd=tmp_path, capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+
+
+def test_repo_is_clean():
+    r = subprocess.run([sys.executable, str(SCAN)], cwd=SCAN.parents[1], capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stdout
