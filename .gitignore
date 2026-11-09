@@ -9,3 +9,4 @@ dist/
 instance/
 .pytest_cache/
 .superpowers/
+infra/pfsense/iso/
