@@ -27,7 +27,7 @@
      0
     ],
     "parameters": {
-     "jsCode": "// Discord 알림(113) 본문 만들기. 웹훅 주소는 Discord 노드의 자격 증명에만 둔다.\nconst b = $input.first().json;\nconst lv = { info: '[정보]', warn: '[경고]', error: '[오류]' }[b.level || 'info'] || '[정보]';\nconst lines = [`${lv} **[${b.case_id || '-'}] ${b.title || '알림'}**`];\nif (b.src_ip) lines.push(`출발지: ${b.src_ip}`);\nif (b.ticket_id) lines.push(`티켓: ${b.ticket_id}`);\nif (b.result) lines.push(`결과: ${b.result}`);\nif (b.detail) lines.push(String(b.detail).slice(0, 500));\nlines.push(`n8n 실행: ${$execution.id}`);\nreturn [{ json: { content: lines.join('\\n'), ctx: b.ctx } }];\n"
+     "jsCode": "// Discord 알림(113) 본문 만들기. 웹훅 주소는 Discord 노드의 자격 증명에만 둔다.\n// 11/09 반소람: 티켓 카드(embed)로 보낸다. 색 막대(차단 빨강·해제 초록·확인 필요 주황), IP·심각도·계정·티켓·상태 칸.\n// 입력 필드는 원본과 같다(level, case_id, title, src_ip, ticket_id, result, detail, ctx).\nconst b = $input.first().json;\nconst x = b.ctx || {};\nconst CASE = { S1: ['로그인 무차별 대입', 'High'], S4: ['계정 탈취 의심', 'High'], S7: ['홈페이지 변조', 'Critical'],\n  S8: ['포털 스캔·로그인 반복', 'Medium'], S10: ['경계 차단·스캔·로그인 반복', 'High'], S12: ['요청 폭주', 'High'],\n  H1: ['민원 도배', 'Medium'] };\nconst ACT = { 'portal/block': '포털 IP 차단', 'pfsense/block': 'pfSense 차단', 'pfsense/fw_block': 'pfSense 차단',\n  'portal/restrict_posting': '민원 작성 제한', 'portal/lock': '계정 잠금' };\nconst RES = { applied: '적용', already_applied: '이미 적용', released: '해제', dry_run: '시험(조치 없음)',\n  failed: '실패', rejected: '거부', skipped: '건너뜀' };\nconst [name, severity] = CASE[b.case_id] || [b.title || '알림', '-'];\nconst release = /원복/.test(b.title || '');\nconst bad = b.level === 'error';\nconst steps = (x.results || []).map((s, i) => {\n  if (release) return `${s.step === 1 ? 'pfSense 해제' : '포털 해제'} ${RES[s.result] || s.result}`;\n  const e = (x.expected || [])[i] || {};\n  return `${ACT[`${e.via}/${e.action}`] || `조치 ${i + 1}`} ${RES[s.result] || s.result}`;\n});\nconst verb = bad ? '⛔ 확인 필요' : release ? '✅ 해제' : '🚫 차단';\nconst flow = release ? `승인 ${x.approver || '-'} → ${steps.join(' → ') || '해제 대상 없음'}`\n  : `Graylog ${b.case_id || ''} 경보 → n8n 자동 대응 → ${steps.join(' · ') || '조치 없음'}`;\nconst fields = [{ name: 'IP', value: b.src_ip || '-', inline: true }, { name: '심각도', value: severity, inline: true }];\nif (x.username) fields.push({ name: '계정', value: x.username, inline: true });\nfields.push({ name: '티켓', value: b.ticket_id || '-', inline: true },\n  { name: '상태', value: bad ? '사람 확인 필요' : release ? '원복 완료' : '차단 중 · 담당자 확인 후 해제', inline: true });\nif (bad) fields.push({ name: '사유', value: String(b.detail || '-').slice(0, 300), inline: false });\nconst embed = { title: `${verb} · [${b.case_id || '-'}] ${name}`, description: flow,\n  color: bad ? 0xE67E22 : release ? 0x2ECC71 : 0xE74C3C, fields,\n  footer: { text: `해담 SOAR · n8n 실행 ${$execution.id} · 대시보드 http://127.0.0.1:8089` }, timestamp: new Date().toISOString() };\n// content는 알림 미리보기(모바일 푸시)에 쓰이는 한 줄\nreturn [{ json: { content: `${verb} [${b.case_id || '-'}] ${b.src_ip || ''} ${b.ticket_id || ''}`.trim(), embed, ctx: b.ctx } }];\n"
     }
    },
    {
@@ -42,7 +42,15 @@
     "parameters": {
      "authentication": "webhook",
      "content": "={{ $json.content }}",
-     "options": {}
+     "options": {},
+     "embeds": {
+      "values": [
+       {
+        "inputMethod": "json",
+        "json": "={{ JSON.stringify($json.embed) }}"
+       }
+      ]
+     }
     },
     "onError": "continueRegularOutput"
    },

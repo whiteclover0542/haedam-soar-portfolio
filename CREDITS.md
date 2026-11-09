@@ -42,6 +42,7 @@ PC 한 대에서 동작시키느라 원작 파일을 고친 곳입니다. 동작
 | --- | --- | --- | --- |
 | `lab/pfsense/pfsense_response.py` | 김명준 | `easyrule` 뒤 테이블 반영을 최대 15초 기다림. 승인 해시 `f0eea297…` → `c9f561ba…`(`install_bundle.py`·`tools/build_pfsense_bundle.py`·`lab/pfsense/INSTALL.md`) | 실제 장비에서 반영이 약 2초 늦어 즉시 읽기가 `outcome_needs_reconciliation`이 됨 |
 | `infra/n8n/workflows/haedam-50-release.json` | 김대훈 | 본문 `dry_run:false`일 때만 실제 해제, 웹훅에 Header Auth(`haedam-release caller`) | 해제가 코드에 고정된 관찰 모드였고, 웹훅에 인증이 없었음 |
+| `infra/n8n/workflows/haedam-11-discord-notify.json` | 김대훈 | 본문을 티켓 카드(embed: 색 막대·IP·심각도·계정·티켓·상태 칸)로, Discord 노드가 embed를 보냄 | 알림을 한눈에 읽게(사용자 요청) |
 | `infra/n8n/workflows/haedam-15·17` | 김대훈 | Wazuh API 주소 `10.250.0.3:55000` → `10.250.0.4:55000` | 단일 PC 주소 |
 | `infra/graylog/pipelines/pfsense-parse.txt` | 김명준 | 파일은 그대로. 반입할 때 `bootstrap.py`가 단계별 규칙을 한 줄씩으로 바꿔 넣음 | Graylog API 문법 |
 | `infra/wazuh/config/*` | Wazuh Inc.(wazuh-docker v4.9.2, GPLv2) | 인증서 경로를 생성기 파일 이름으로, 비밀번호를 `.env`로(`internal_users.yml`은 템플릿에서 생성) | 바인드 마운트 키 권한 문제, 기본 비밀번호 제거 |
