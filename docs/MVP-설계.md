@@ -117,7 +117,7 @@ Wazuh 경보 경로는 S7 단계에서 붙인다. 팀에서 쓴 UDP→TCP 중계
 
 ### 4-5. 설정 파일을 저장소에 포함
 
-- **Graylog:** 입력·스트림·파이프라인·이벤트 정의·n8n 알림을 콘텐츠 팩 JSON으로 저장한다. 원본 자료는 다음과 같다.
+- **Graylog:** 입력·스트림·파이프라인·이벤트 정의·n8n 알림을 `infra/graylog/bootstrap.py`가 API로 만든다(콘텐츠 팩은 알림 헤더의 웹훅 키가 파일에 남아 쓰지 않음, 11/09). 원본 자료는 다음과 같다.
   - `infra/graylog/pipelines`
   - `lab/s1s4/graylog/*.json`
   - `infra/graylog/notifications`
@@ -159,7 +159,7 @@ Wazuh 경보 경로는 S7 단계에서 붙인다. 팀에서 쓴 UDP→TCP 중계
 ## 6. 빌더 재량
 
 - 포털 컨테이너화 방식(Dockerfile 구조, alembic 마이그레이션 실행 시점)
-- Graylog 설정을 콘텐츠 팩 수동 업로드로 할지, 첫 기동 시 API 스크립트로 자동 반입할지. 콘텐츠 팩 파일은 둘 중 어느 쪽이든 포함한다.
+- ~~Graylog 설정을 콘텐츠 팩 수동 업로드로 할지, API 스크립트로 자동 반입할지~~ → API 스크립트(`bootstrap.py`)로 결정(11/09)
 - n8n 워크플로 가져오기 자동화(`n8n import:workflow` 등)
 - 고정 IP 대역, 포트 번호(팀 포트 유지 권장)
 - 저장소 폴더 이름

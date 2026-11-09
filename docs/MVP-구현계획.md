@@ -172,7 +172,6 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 - 만들기:
   - `infra/graylog/compose.yaml`(팀 compose 기반, 고정 IP, `name:`·VPN 주석 제거)
   - `infra/graylog/bootstrap.py`
-  - `infra/graylog/content-pack.json`(반입 후 내보낸 것)
   - `tests/test_graylog_bootstrap.py`
 - 사용: `infra/graylog/pipelines/pfsense-parse.txt`, `lab/s1s4/graylog/s1-login-bruteforce.json`, `lab/s8s10/graylog/{s8-scan-then-login,s10-three-layer,s8-s10-n8n-notification}.json`, `infra/graylog/notifications/s1-n8n-haedam-s1.json`
 
@@ -202,8 +201,7 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - `normal`에서 포털 요청 1건을 보내면 Search `source:haedam-portal`에 1건이 뜬다.
   - Task 1의 ping 1건이 `rule:"pfsense-block"`으로 정규화돼 보인다.
   - bootstrap을 두 번째 실행하면 "생성 0" 출력
-- [ ] **6단계(생략, 11/09):** 알림 헤더에 n8n 웹훅 키가 들어가 내보내면 비밀값이 남고, bootstrap과 내용이 겹친다. `System > Content Packs > Create`로 입력·스트림·파이프라인·이벤트·알림을 묶어 `content-pack.json`으로 저장한다. 수동 업로드 경로로도 쓸 수 있다.
-- [x] **7단계:** 커밋한다. `feat(graylog): 단일 PC 구성, 탐지 설정 bootstrap·콘텐츠 팩`
+- [x] **6단계:** 커밋한다. `feat(graylog): 단일 PC 구성, 탐지 설정 bootstrap`
 
 ### Task 4: n8n 워크플로·자격 증명 반입
 
@@ -323,7 +321,7 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
    - Wazuh 인증서
    - `docker compose --profile "*" up -d`
    - pfSense 설치(`infra/pfsense/INSTALL.md`)와 `config.xml` 복원
-   - Graylog bootstrap 또는 콘텐츠 팩 업로드
+   - Graylog bootstrap
    - n8n `import.ps1`
    - `tools/check_stack.py`
 5. **구성별 표:** 실행 명령·접속 주소·포트·기본 설정 방법
