@@ -14,8 +14,60 @@ networks:
 
 volumes:
   pfsense-data:
+  portal-db:
+  ticket-data:
 
 services:
+  # ── 서버: 포털(원작 반소람)·MySQL·티켓 저장소(원작 김상혁) ──
+  portal-db:
+    image: mysql:8.4
+    container_name: haedam-portal-db
+    environment:
+      MYSQL_DATABASE: haedam
+      MYSQL_USER: haedam
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?.env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?.env}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      lan: {ipv4_address: 10.250.0.5}
+    volumes: [portal-db:/var/lib/mysql]
+    mem_limit: 512m
+    restart: unless-stopped
+
+  portal:
+    build: services/portal
+    container_name: haedam-portal
+    cap_add: [NET_ADMIN]   # entrypoint의 복귀 경로(203.0.113.0/24 via pfSense)
+    environment:
+      DATABASE_URL: mysql+pymysql://haedam:${MYSQL_PASSWORD}@10.250.0.5/haedam?charset=utf8mb4
+      GELF_ENABLED: "1"
+      GELF_HOST: 10.250.0.100
+      GELF_TRANSPORT: tcp
+      RESPONSE_API_KEY: ${PORTAL_RESPONSE_KEY:?.env}
+      RESPONSE_ALLOWED_CIDRS: 10.250.0.103/32
+      DASHBOARD_URL: http://127.0.0.1:8089
+      PORTAL_ADMIN_USERNAME: ${PORTAL_ADMIN_USERNAME:?.env}
+      PORTAL_ADMIN_PASSWORD: ${PORTAL_ADMIN_PASSWORD:?.env}
+    networks:
+      lan: {ipv4_address: 10.250.0.2}
+    ports: ["127.0.0.1:8080:5000"]
+    depends_on: [portal-db]
+    mem_limit: 384m
+    restart: unless-stopped
+
+  ticket-store:
+    build: services/ticket-store
+    container_name: haedam-ticket-store
+    environment:
+      TICKET_STORE_KEY: ${TICKET_STORE_KEY:?.env}
+      DASHBOARD_ORIGIN: http://127.0.0.1:8089
+    networks:
+      lan: {ipv4_address: 10.250.0.3}
+    ports: ["127.0.0.1:8089:8089"]   # 대시보드만. n8n API 8088은 lan 안에서만
+    volumes: [ticket-data:/data]
+    mem_limit: 256m
+    restart: unless-stopped
+
   # ── pfSense (원작 규칙·도구: 김명준, 컨테이너화: 반소람) ──
   pfsense:
     build: infra/pfsense

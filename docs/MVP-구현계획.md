@@ -160,11 +160,11 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - 첫 기동이면 `flask seed-demo`와 `create-admin`(값은 `.env`)
   - `waitress-serve --port 5000`
 
-- [ ] **1단계:** Dockerfile·entrypoint·compose를 쓴다.
-- [ ] **2단계:** `docker compose -f services/portal/compose.yaml up -d --build`를 실행한다. 이어서 `docker compose ... down -v && ... up -d`(빈 볼륨 재기동)를 하고 `docker logs portal`에 `Serving on`이 나오는지 본다(리뷰 중점 4).
-- [ ] **3단계:** `normal` 컨테이너에서 `curl -s http://203.0.113.1/api/v1/health`(pfSense 경유) → 200 JSON. 호스트에서 `http://127.0.0.1:8080` → 로그인 화면.
-- [ ] **4단계:** 포털 `instance/events.jsonl`의 마지막 줄 `src_ip`가 `203.0.113.100`인지 확인한다(NAT 보존).
-- [ ] **5단계:** 커밋한다. `feat(server): 포털·MySQL·티켓 저장소 컨테이너, pfSense 경유 복귀 경로`
+- [x] **1단계:** Dockerfile·entrypoint·compose를 쓴다.
+- [x] **2단계:** `docker compose -f services/portal/compose.yaml up -d --build`를 실행한다. 이어서 `docker compose ... down -v && ... up -d`(빈 볼륨 재기동)를 하고 `docker logs portal`에 `Serving on`이 나오는지 본다(리뷰 중점 4).
+- [x] **3단계:** `normal` 컨테이너에서 `curl -s http://203.0.113.1/api/v1/health`(pfSense 경유) → 200 JSON. 호스트에서 `http://127.0.0.1:8080` → 로그인 화면.
+- [x] **4단계:** 포털 `instance/events.jsonl`의 마지막 줄 `src_ip`가 `203.0.113.100`인지 확인한다(NAT 보존).
+- [x] **5단계:** 커밋한다. `feat(server): 포털·MySQL·티켓 저장소 컨테이너, pfSense 경유 복귀 경로`
 
 ### Task 3: Graylog와 탐지 설정 자동 반입
 

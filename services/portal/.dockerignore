@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/instance
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/*.sqlite3
+frontend/tests
+frontend/test-results
+frontend/playwright-report
