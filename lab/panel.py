@@ -8,6 +8,7 @@ import json
 import secrets
 import sys
 import threading
+import urllib.parse
 import urllib.request
 import webbrowser
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ PORT = 8099
 TOKEN = secrets.token_urlsafe(16)
 CASES = ["S10", "S8", "S1"]
 S1_USER = {}  # 이번 실행에서 만든 S1 피해자 계정(이름·비밀번호는 메모리에만)
+RUNS = {}     # case → {"at": 공격 시각, "effect": 마지막 효과, "released": 해제 결과}
 LOCK = threading.Lock()  # 공격 버튼을 동시에 두 번 누르지 않게
 
 
@@ -54,6 +56,7 @@ def attack(case):
         log.append({"step": "같은 계정에 틀린 비밀번호 9번", "cmd": f"docker exec haedam-attacker python /lab/portal_login.py --source {src} fail {user} 9",
                     "result": fails})
     log.append({"step": "Graylog가 1분마다 평가 → 보통 30~70초 뒤 티켓·차단", "cmd": "", "result": "기다리는 중"})
+    RUNS[case] = {"at": datetime.now(timezone.utc), "effect": None, "released": None}
     return log
 
 
@@ -66,6 +69,8 @@ def effect(case):
     if case == "S1" and S1_USER:
         login = portal_login("haedam-normal", NORMAL, "login", S1_USER["user"], pw=S1_USER["pw"])["statuses"]
         out.append({"step": f"계정 주인이 {S1_USER['user']}로 로그인", "cmd": "portal_login.py login", "result": login})
+    if case in RUNS:
+        RUNS[case]["effect"] = {"attacker": out[0]["result"], "normal": out[1]["result"]}
     return out
 
 
@@ -80,7 +85,7 @@ def latest_ticket(case):
     t = max(items.values(), key=lambda t: t["updated_at"])
     detail = get(f"{TICKETS}/{t['ticket_id']}")["ticket"]
     return {"ticket_id": t["ticket_id"], "case_id": detail["case_id"], "status": detail["status"],
-            "mttd_seconds": t.get("mttd_seconds"),
+            "mttd_seconds": t.get("mttd_seconds"), "updated_at": t["updated_at"], "raw_actions": detail.get("actions", []),
             "actions": [f"{a['via']} {a['action']} → {a['result']}" for a in detail.get("actions", [])]}
 
 
@@ -96,17 +101,76 @@ def release(case):
         rel = json.loads(r.read())
     rel = rel[0] if isinstance(rel, list) else rel
     steps = [f"{'pfSense' if s.get('step') == 1 else '포털'} {s.get('result')}" for s in rel.get("steps") or []]
+    after = http_code("haedam-attacker", SRC[case])
+    if case in RUNS:
+        RUNS[case]["released"] = {"steps": steps, "attacker": after}
     return [{"step": "n8n haedam-50 해제(경계 → 앱 순서)", "cmd": "POST /webhook/haedam-release", "result": steps or rel.get("verdict")},
-            {"step": "해제 후 공격자", "cmd": "", "result": http_code("haedam-attacker", SRC[case])}]
+            {"step": "해제 후 공격자", "cmd": "", "result": after}]
+
+
+EXPECT = {"S10": ("000", "pfSense에서 연결 자체가 끊김"), "S8": ("403", "포털이 IP_BLOCKED로 거절"),
+          "S1": ("403", "포털이 IP_BLOCKED로 거절")}
+
+
+def graylog_count(case, since):
+    q = f"src_ip:{SRC[case]}" if case != "S1" else f"username:{S1_USER.get('user', '-')}"
+    pw = env()["GRAYLOG_ADMIN_PASSWORD"]
+    url = ("http://127.0.0.1:9000/api/search/universal/absolute?limit=1&query=" + urllib.parse.quote(q)
+           + "&from=" + since.strftime("%Y-%m-%dT%H:%M:%S.000Z") + "&to=" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+    req = urllib.request.Request(url, headers={"Accept": "application/json", "Authorization":
+                                               "Basic " + __import__("base64").b64encode(f"admin:{pw}".encode()).decode()})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read())["total_results"]
+
+
+def timeline(case):
+    run = RUNS.get(case)
+    if not run:
+        return {"steps": [], "elapsed": None}
+    at = run["at"]
+    elapsed = int((datetime.now(timezone.utc) - at).total_seconds())
+    t = latest_ticket(case)
+    if t and t["updated_at"] < at.isoformat():
+        t = None  # 이번 공격 전의 티켓
+    logs = graylog_count(case, at)
+    acts = (t or {}).get("raw_actions", [])
+    blocks = [a for a in acts if a["action"] in ("block", "fw_block") and a["result"] in ("applied", "already_applied")]
+    need = {"portal", "pfsense"} if case == "S10" else {"portal"}
+    done = need <= {a["via"] for a in blocks}
+    if t and done and run["effect"] is None and run["released"] is None:  # 차단이 들어가면(해제 전) 효과를 한 번 자동으로 본다
+        run["effect"] = {"attacker": http_code("haedam-attacker", SRC[case]), "normal": http_code("haedam-normal", NORMAL)}
+    eff, rel = run["effect"], run["released"]
+    want, why = EXPECT[case]
+    st = lambda ok, wait=True: "done" if ok else ("wait" if wait else "bad")
+    steps = [
+        {"name": "① 공격 보냄", "state": "done", "text": f"{SRC[case]}에서 입력을 보냈습니다.", "link": None},
+        {"name": "② Graylog에 로그 도착", "state": st(logs > 0), "link": "http://127.0.0.1:9000/search",
+         "text": f"이번 공격 뒤 이 출발지 로그 {logs}건." if logs else "포털·pfSense 로그가 Graylog에 들어오기를 기다리는 중."},
+        {"name": "③ 탐지 (Graylog 경보)", "state": st(bool(t)), "link": "http://127.0.0.1:9000/alerts",
+         "text": (f"경보 → n8n 호출 → 티켓 {t['ticket_id']} 생성." if t else
+                  f"Graylog가 1분마다 조건을 확인합니다. 공격 뒤 {elapsed}초 경과(보통 30~70초).")},
+        {"name": "④ 자동 대응 (n8n)", "state": st(done, wait=not (t and elapsed > 240)), "link": "http://127.0.0.1:5678/home/executions",
+         "text": ("차단 적용: " + ", ".join(f"{a['via']} {a['result']}" for a in blocks)) if blocks else
+                 ("조치를 기다리는 중." if t else "탐지 뒤에 시작됩니다.")
+                 + (" (S10은 포털과 pfSense 둘 다)" if case == "S10" else "")},
+        {"name": "⑤ 효과", "state": st(bool(eff) and eff["attacker"] == want and eff["normal"] == "200", wait=not eff),
+         "link": None,
+         "text": (f"공격자 {eff['attacker']}(기대 {want}: {why}), 정상 시민 {eff['normal']}(기대 200)." if eff
+                  else "차단이 적용되면 자동으로 확인합니다.")},
+        {"name": "⑥ 해제 (사람이 확인 후)", "state": st(bool(rel) and rel["attacker"] == "200", wait=not rel), "link": "http://127.0.0.1:8089",
+         "text": (f"{' → '.join(rel['steps']) or '단계 없음'} · 공격자 다시 {rel['attacker']}." if rel
+                  else "효과를 확인했으면 [해제]를 누릅니다. pfSense를 먼저 풀고 포털을 풉니다.")},
+    ]
+    return {"steps": steps, "elapsed": elapsed, "ticket": t and {k: t[k] for k in ("ticket_id", "status", "mttd_seconds")}}
 
 
 def state():
     out = {}
     for c in CASES:
         try:
-            out[c] = {"src": SRC[c], "ticket": latest_ticket(c)}
-        except Exception as exc:  # 티켓 저장소가 잠깐 안 될 때도 화면은 유지
-            out[c] = {"src": SRC[c], "ticket": None, "error": type(exc).__name__}
+            out[c] = {"src": SRC[c], **timeline(c)}
+        except Exception as exc:  # 한 구성이 잠깐 안 될 때도 화면은 유지
+            out[c] = {"src": SRC[c], "steps": [], "error": f"{type(exc).__name__}: {str(exc)[:120]}"}
     return out
 
 
@@ -150,46 +214,55 @@ class Handler(BaseHTTPRequestHandler):
 PAGE = r"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>해담 SOAR 실습</title>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2330;--mute:#5d6676;--line:#dde1e7;--red:#c8372d;--blue:#2459c4;--green:#1f7a4d}
-@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d2128;--ink:#e6e9ef;--mute:#9aa3b2;--line:#2e343e;--red:#ff6b5e;--blue:#7aa2ff;--green:#4cc38a}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,"Malgun Gothic",sans-serif}
-header{padding:20px 24px 8px}h1{margin:0;font-size:20px}header p{margin:4px 0 0;color:var(--mute)}
-nav{display:flex;flex-wrap:wrap;gap:8px;padding:8px 24px 16px}nav a{color:var(--blue);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;background:var(--card)}
-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;padding:0 24px 24px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
-.card h2{margin:0;font-size:17px}.card .who{color:var(--mute);font-size:13px;margin:2px 0 10px}.card .desc{margin:0 0 12px}
-.btns{display:flex;gap:8px;flex-wrap:wrap}button{font:inherit;border-radius:6px;padding:7px 14px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
-button.attack{background:var(--red);border-color:var(--red);color:#fff}button:disabled{opacity:.5;cursor:wait}
-.ticket{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:14px}.ticket b{font-weight:600}.ok{color:var(--green)}
-#log{margin:0 24px 32px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;max-height:45vh;overflow:auto}
-#log h2{font-size:16px;margin:0 0 8px}.entry{border-top:1px solid var(--line);padding:6px 0}.entry code{color:var(--mute);font-size:12px;word-break:break-all}
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2330;--mute:#5d6676;--line:#dde1e7;--red:#c8372d;--blue:#2459c4;--green:#1f7a4d;--amber:#a86400}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d2128;--ink:#e6e9ef;--mute:#9aa3b2;--line:#2e343e;--red:#ff6b5e;--blue:#7aa2ff;--green:#4cc38a;--amber:#f0b44c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
+header{padding:20px 24px 4px}h1{margin:0;font-size:20px}header p{margin:4px 0 0;color:var(--mute)}
+nav{display:flex;flex-wrap:wrap;gap:8px;padding:10px 24px 16px}nav a{color:var(--blue);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;background:var(--card)}
+.tabs{display:flex;gap:8px;padding:0 24px}.tabs button{font:inherit;border:1px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;padding:8px 16px;background:var(--bg);color:var(--mute);cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--ink);font-weight:600}
+.panel{margin:0 24px 24px;background:var(--card);border:1px solid var(--line);border-radius:0 10px 10px 10px;padding:18px 20px}
+.top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start}.top h2{margin:0;font-size:18px}.top p{margin:4px 0 0;color:var(--mute);max-width:640px}
+.btns{display:flex;gap:8px}.btns button{font:inherit;border-radius:6px;padding:8px 16px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.btns .attack{background:var(--red);border-color:var(--red);color:#fff}.btns button:disabled{opacity:.5;cursor:wait}
+ol{list-style:none;margin:18px 0 0;padding:0}li{display:grid;grid-template-columns:32px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:700;color:#fff;background:var(--line)}
+.done .dot{background:var(--green)}.wait .dot{background:var(--amber)}.bad .dot{background:var(--red)}.idle .dot{background:var(--line)}
+.wait .dot{animation:pulse 1.4s infinite}@keyframes pulse{50%{opacity:.45}}
+li b{display:block}li span{color:var(--mute)}li a{color:var(--blue);font-size:13px;margin-left:6px}
+.hint{margin-top:14px;padding:10px 12px;border-radius:8px;background:var(--bg);color:var(--mute)}
+details{margin:0 24px 32px}summary{cursor:pointer;color:var(--mute)}.entry{border-top:1px solid var(--line);padding:6px 0;font-size:14px}.entry code{color:var(--mute);font-size:12px;word-break:break-all}
 </style></head><body>
-<header><h1>해담 SOAR 실습 제어판</h1><p>버튼은 <code>docs/실습-안내.md</code>의 명령을 그대로 실행합니다. 같은 출발지는 15분(S1 30분)에 한 번씩.</p></header>
+<header><h1>해담 SOAR 실습 제어판</h1><p>티켓을 고르고 [공격]을 누른 뒤, 아래 단계가 차례로 초록색이 되는 것을 지켜보세요.</p></header>
 <nav><a href="http://127.0.0.1:9000" target="_blank">Graylog</a><a href="http://127.0.0.1:5678" target="_blank">n8n</a>
 <a href="http://127.0.0.1:8089" target="_blank">티켓 대시보드</a><a href="https://127.0.0.1:8443" target="_blank">pfSense</a><a href="http://127.0.0.1:8080" target="_blank">민원 포털</a></nav>
-<main id="cards"></main>
-<section id="log"><h2>실행 기록</h2><div id="entries"></div></section>
+<div class="tabs" id="tabs"></div><section class="panel" id="panel"></section>
+<details><summary>실행한 명령 보기</summary><div id="entries"></div></details>
 <script>
-const TOKEN="__TOKEN__";
-const INFO={S10:["경계 차단 → 스캔 → 로그인 시도","ping(pfSense 차단) + 스캔 + 틀린 로그인. 포털과 pfSense 모두에서 막힙니다. 공격자 기대값 000(연결 불가)."],
-S8:["포털 스캔 → 로그인 시도","ping 없이 스캔 + 틀린 로그인. 포털에서만 막습니다. 공격자 기대값 403."],
-S1:["로그인 무차별 대입","같은 계정에 틀린 비밀번호 9번. 출발지만 막고 계정 주인은 정상 로그인(200)."]};
-const H={"X-Panel-Token":TOKEN};
-document.getElementById("cards").innerHTML=Object.keys(INFO).map(c=>`<section class="card"><h2>${c} · ${INFO[c][0]}</h2>
-<div class="who" id="src-${c}"></div><p class="desc">${INFO[c][1]}</p>
-<div class="btns"><button class="attack" onclick="run('attack','${c}',this)">공격</button><button onclick="run('effect','${c}',this)">효과 확인</button><button onclick="run('release','${c}',this)">해제</button></div>
-<div class="ticket" id="t-${c}">티켓 없음</div></section>`).join("");
-function esc(s){return String(s).replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
-async function run(action,c,btn){document.querySelectorAll("button").forEach(b=>b.disabled=true);
+const TOKEN="__TOKEN__",H={"X-Panel-Token":TOKEN};
+const INFO={S10:["S10 · 경계 차단 → 스캔 → 로그인 시도","공격자가 ping(방화벽에서 막힘), 없는 페이지 스캔, 틀린 로그인을 차례로 합니다. 세 신호가 모두 모이면 포털과 pfSense 양쪽에서 막습니다."],
+S8:["S8 · 포털 스캔 → 로그인 시도","ping 없이 스캔과 틀린 로그인만 합니다. 방화벽 신호가 없으니 포털에서만 막습니다."],
+S1:["S1 · 로그인 무차별 대입","정상 시민이 계정을 만들고, 공격자가 그 계정에 틀린 비밀번호를 9번 넣습니다. 공격자 IP만 막고 계정 주인은 그대로 로그인합니다."]};
+let cur="S10",last={};
+function esc(s){return String(s??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
+function tabs(){document.getElementById("tabs").innerHTML=Object.keys(INFO).map(c=>`<button class="${c===cur?'on':''}" onclick="cur='${c}';tabs();draw()">${c}</button>`).join("")}
+function draw(){const d=last[cur]||{},steps=d.steps||[];
+ const list=steps.length?steps:["① 공격 보냄","② Graylog에 로그 도착","③ 탐지 (Graylog 경보)","④ 자동 대응 (n8n)","⑤ 효과","⑥ 해제 (사람이 확인 후)"].map(n=>({name:n,state:"idle",text:"[공격]을 누르면 시작합니다."}));
+ const icon={done:"✓",wait:"…",bad:"!",idle:""};
+ const next=!steps.length?"[공격]을 눌러 시작하세요.":steps.find(s=>s.state==="bad")?"빨간 단계를 확인하세요. 오른쪽 링크의 화면에서 원인을 볼 수 있습니다.":
+   steps[5].state==="done"?"한 바퀴 끝. 같은 출발지는 15분(S1 30분) 뒤에 다시 할 수 있습니다. 다른 탭의 티켓은 바로 해 볼 수 있습니다.":
+   steps[4].state==="done"?"효과까지 확인됐습니다. 티켓 대시보드에서 기록을 본 뒤 [해제]를 누르세요.":"자동으로 진행 중입니다. 5초마다 갱신됩니다.";
+ document.getElementById("panel").innerHTML=`<div class="top"><div><h2>${INFO[cur][0]}</h2><p>${INFO[cur][1]}</p><p>공격자 IP <b>${esc(d.src)}</b>${d.elapsed!=null?` · 공격 뒤 <b>${d.elapsed}초</b>`:""}${d.ticket?` · 티켓 <b>${esc(d.ticket.ticket_id)}</b> (${esc(d.ticket.status)})`:""}</p></div>
+ <div class="btns"><button class="attack" onclick="run('attack')">공격</button><button onclick="run('effect')">효과 다시 확인</button><button onclick="run('release')">해제</button></div></div>
+ <ol>${list.map(s=>`<li class="${s.state}"><div class="dot">${icon[s.state]||""}</div><div><b>${esc(s.name)}${s.link?`<a href="${s.link}" target="_blank">화면 열기</a>`:""}</b><span>${esc(s.text)}</span></div></li>`).join("")}</ol>
+ <div class="hint">${d.error?"상태를 읽지 못했습니다: "+esc(d.error):next}</div>`;}
+async function run(action){const c=cur;document.querySelectorAll(".btns button").forEach(b=>b.disabled=true);
  try{const r=await fetch(`/api/${action}/${c}`,{method:"POST",headers:H});const d=await r.json();
-  const label={attack:"공격",effect:"효과 확인",release:"해제"}[action]||action;
   const rows=(d.log||[{step:d.error,result:""}]).map(x=>`<div>${esc(x.step)} → <b>${esc(JSON.stringify(x.result))}</b>${x.cmd?`<br><code>${esc(x.cmd)}</code>`:""}</div>`).join("");
-  document.getElementById("entries").insertAdjacentHTML("afterbegin",`<div class="entry"><b>${new Date().toLocaleTimeString()} ${c} ${label}</b>${rows}</div>`);}
- finally{document.querySelectorAll("button").forEach(b=>b.disabled=false);refresh();}}
-async function refresh(){try{const s=await (await fetch("/api/state",{headers:H})).json();
- for(const c in s){document.getElementById("src-"+c).textContent="출발지 "+s[c].src;const t=s[c].ticket;
-  document.getElementById("t-"+c).innerHTML=t?`<b>${t.ticket_id}</b> · 상태 <b class="${t.status==='restored'?'ok':''}">${t.status}</b>${t.mttd_seconds!=null?` · MTTD ${t.mttd_seconds}초`:""}<br>${t.actions.map(esc).join("<br>")||"조치 없음"}`:"이 출발지의 티켓 없음";}}catch(e){}}
-refresh();setInterval(refresh,5000);
+  document.getElementById("entries").insertAdjacentHTML("afterbegin",`<div class="entry"><b>${new Date().toLocaleTimeString()} ${c} ${action}</b>${rows}</div>`);}
+ finally{await refresh();}}
+async function refresh(){try{last=await (await fetch("/api/state",{headers:H})).json();}catch(e){} draw();}
+tabs();refresh();setInterval(refresh,5000);
 </script></body></html>"""
 
 
