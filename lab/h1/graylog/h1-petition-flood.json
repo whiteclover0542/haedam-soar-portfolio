@@ -1,0 +1,89 @@
+{
+  "title": "H1 민원 도배 (username)",
+  "description": "H1(반소람). 10분 안 같은 username의 민원 등록(petition.created, 201)이 5건 이상. 정상 시민 기준선은 docs/tickets/H1/README.md. 대응은 그 계정의 민원 작성만 제한(로그인·조회 유지).",
+  "priority": 2,
+  "alert": true,
+  "config": {
+    "type": "aggregation-v1",
+    "query": "source:haedam-portal AND event_type:\"petition.created\" AND status:201",
+    "query_parameters": [],
+    "filters": [],
+    "streams": [
+      "REPLACE_haedam-portal_stream_id"
+    ],
+    "group_by": [
+      "username"
+    ],
+    "series": [
+      {
+        "id": "count()",
+        "type": "count"
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 4
+        }
+      }
+    },
+    "search_within_ms": 600000,
+    "execute_every_ms": 60000,
+    "use_cron_scheduling": false,
+    "event_limit": 100
+  },
+  "field_spec": {
+    "username": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "${source.username}",
+          "require_values": true
+        }
+      ]
+    },
+    "src_ip": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "${source.src_ip}",
+          "require_values": false
+        }
+      ]
+    },
+    "case_id": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "H1",
+          "require_values": true
+        }
+      ]
+    }
+  },
+  "key_spec": [
+    "username"
+  ],
+  "notification_settings": {
+    "grace_period_ms": 600000,
+    "backlog_size": 20
+  },
+  "notifications": [],
+  "storage": [
+    {
+      "type": "persist-to-streams-v1",
+      "streams": [
+        "000000000000000000000002"
+      ]
+    }
+  ]
+}

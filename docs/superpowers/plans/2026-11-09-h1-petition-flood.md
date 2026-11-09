@@ -121,7 +121,7 @@ def test_refusal_is_logged(app):
 - Consumes: 포털 GELF 필드 `_event_type`, `_username`, `_status`(Task 1의 `petition.created` 201)
 - Produces: 정의 제목 `H1 민원 도배 (username)`, 알림 제목 `n8n haedam-h1 (H1 → haedam-35)`, 알림 URL `http://10.250.0.103:5678/webhook/haedam-h1`, 본문 필드 `event_id, asset_id, username, src_ip, case_id, condition_met_at, detected_at, event_definition_id`(S1 알림과 같은 형식, `case_id`는 `H1` 고정)
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 ```python
 def test_h1_definition_groups_by_username():
@@ -136,10 +136,10 @@ def test_bootstrap_lists_h1():
     assert DEFINITIONS["lab/h1/graylog/h1-petition-flood.json"] == "haedam-h1" and "haedam-h1" in NOTIFICATIONS
 ```
 
-- [ ] **Step 2: 실패 확인** — `python -m pytest tests/test_graylog_bootstrap.py -v`
-- [ ] **Step 3: 구현** — S1 정의(`lab/s1s4/graylog/s1-login-bruteforce.json`)를 본떠 쿼리 `source:haedam-portal AND event_type:"petition.created" AND status:201`, `group_by ["username"]`, 창 10분, 평가 60초, `field_spec`의 `case_id`는 `H1`. 알림은 `s1-n8n-haedam-s1.json`의 URL·제목만 바꾼다. `bootstrap.py` 두 사전에 한 줄씩.
-- [ ] **Step 4: 통과 확인**
-- [ ] **Step 5: 커밋** — `feat(graylog): H1 민원 도배 탐지 정의·알림`
+- [x] **Step 2: 실패 확인** — `python -m pytest tests/test_graylog_bootstrap.py -v`
+- [x] **Step 3: 구현** — S1 정의(`lab/s1s4/graylog/s1-login-bruteforce.json`)를 본떠 쿼리 `source:haedam-portal AND event_type:"petition.created" AND status:201`, `group_by ["username"]`, 창 10분, 평가 60초, `field_spec`의 `case_id`는 `H1`. 알림은 `s1-n8n-haedam-s1.json`의 URL·제목만 바꾼다. `bootstrap.py` 두 사전에 한 줄씩.
+- [x] **Step 4: 통과 확인**
+- [x] **Step 5: 커밋** — `feat(graylog): H1 민원 도배 탐지 정의·알림`
 
 ### Task 3: n8n — H1 메인과 작성 제한 하위 워크플로 (H1-3)
 
