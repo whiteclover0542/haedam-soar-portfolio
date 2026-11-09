@@ -47,3 +47,9 @@ def test_h1_auto_ok_expects_429():
 def test_baseline_rows_count_false_positives_only():
     s = summarize([row(case="H1", baseline=True, ticket_id="T-1"), row(case="H1", baseline=True, ticket_id=None), row(case="H1")])
     assert s["H1"]["runs"] == 1 and s["H1"]["false_positives"] == 1 and s["H1"]["baseline_runs"] == 2
+
+
+def test_fixed_drops_only_s10_runs_before_fix():
+    early = "2026-11-09T03:30:00+00:00"
+    s = summarize([row(case="S10", input_at=early, applied=False), row(input_at=early), row(case="S10", input_at="2026-11-09T04:00:00Z")])
+    assert s["total"]["runs"] == 3 and s["fixed"]["runs"] == 2

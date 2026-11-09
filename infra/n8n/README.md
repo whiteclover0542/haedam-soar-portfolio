@@ -30,7 +30,7 @@ $env:BIND_IP = "<team-d 주소>"; docker compose -f infra/n8n/docker-compose.yml
 
 **haedam-14 (pfSense, 근거: B의 `lab/pfsense/README.md`, PR #64)**
 - n8n SSH 노드가 `haedam-pf-response ACTION TARGET REQUEST_ID OWNER_ID`를 보낸다. 도구는 `203.0.113.22` 하나만 받는다(다른 주소는 도구가 `rejected`). n8n은 그 앞에서 보호 목록도 먼저 거른다.
-- `REQUEST_ID`는 `{ticket_id}-pf-{ip}-{action}`(재전송 때 같은 값), `OWNER_ID`는 티켓 ID. 해제(`unblock`)는 요청 ID가 달라진다. `status`도 받는다.
+- `REQUEST_ID`는 `{ticket_id}-pf-{ip}-{action}-{밀리초 시각}`(요청마다 새 값, 티켓 저장소를 비워 번호가 다시 나와도 pfSense 도구 기록과 겹치지 않음), `OWNER_ID`는 티켓 ID. 해제(`unblock`)는 요청 ID가 달라진다. `status`도 받는다.
 - 출력 JSON: `applied`·`already_applied`→같은 이름, `released`→`released`, `status`→`listed`, `ok:false`→`rejected` 또는 `failed`. 출력 파싱 실패·비정상 종료·`changed:null`(불확실)은 **성공으로 두지 않고 `failed`**, 자동 재시도 없음(도구 문서).
 - 필요한 것: n8n 자격 증명 `SSH Private Key`(D가 새로 만든 **전용 공개키**의 개인키. 값은 저장소·채팅에 넣지 않음), pfSense 쪽 forced command(`from="10.250.0.100"`)와 D→`10.250.0.1:22` 허용(B 작업). 둘 다 아직 없다.
 - 티켓 기록 이름: 지금은 pfSense 줄을 `action=fw_block`으로 기록한다(C 저장소가 `via`를 안 봐서). B는 `block`+`via=pfsense`를 쓰자고 했으므로 C의 PR #62 배포 뒤 `fw_block`→`block`으로 한꺼번에 바꿔야 한다(check·applied·effect·released 전부).

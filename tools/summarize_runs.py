@@ -16,6 +16,8 @@ RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting")
 # What the attacker / the normal user should get while the response is in force.
 REFUSED = {"H1": ("429",)}
 NORMAL_OK = {"H1": "201"}
+# S10 runs started after this got both pfSense fixes (read-after-apply, release verdict); other tickets do not use pfSense. See journal 2026-11-09.
+FIXED_AT = "2026-11-09T03:46:00+00:00"
 
 
 def _ts(t):
@@ -66,6 +68,7 @@ def _stats(all_rows):
 def summarize(rows):
     out = {c: _stats([r for r in rows if r["case"] == c]) for c in sorted({r["case"] for r in rows})}
     out["total"] = _stats(rows)
+    out["fixed"] = _stats([r for r in rows if r["case"] != "S10" or _ts(r["input_at"]) >= _ts(FIXED_AT)])
     return out
 
 
@@ -85,12 +88,15 @@ def run_table(rows):
     return "\n".join(lines)
 
 
+LABEL = {"total": "전체", "fixed": "수정 후(S10 1·2회차 제외)"}
+
+
 def summary_table(s):
     lines = ["| 티켓 | 회차 | 자동 대응 | 원복 | 정상 사용자 영향 | 오탐(기준선) | MTTD 중앙값 | 탐지→차단 중앙값 | 입력→차단 중앙값 |",
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
-    for k in [c for c in CASES if c in s] + ["total"]:
+    for k in [c for c in CASES if c in s] + ["total", "fixed"]:
         v = s[k]
-        lines.append(f"| {'전체' if k == 'total' else k} | {v['runs']} | {v['auto_ok']}/{v['runs']} | "
+        lines.append(f"| {LABEL.get(k, k)} | {v['runs']} | {v['auto_ok']}/{v['runs']} | "
                      f"{v['restore_ok']}/{v['restore_tried']} | {v['normal_fail_runs']}회 | "
                      f"{v['false_positives']}/{v['baseline_runs']} | {_fmt(v['mttd_median'], '초')} | "
                      f"{_fmt(v['detect_to_block_median'], '초')} | {_fmt(v['input_to_block_median'], '초')} |")
