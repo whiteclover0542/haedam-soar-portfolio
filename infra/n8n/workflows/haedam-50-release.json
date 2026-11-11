@@ -565,6 +565,158 @@
      1760,
      300
     ]
+   },
+   {
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": true,
+       "leftValue": "",
+       "typeValidation": "strict",
+       "version": 2
+      },
+      "conditions": [
+       {
+        "id": "fd2502e9-81bf-4b52-8aad-f6b61e0922a7",
+        "leftValue": "={{ ($json.actions || []).some(a => a.bot === '111' && a.action === 'lock') && !($json.actions || []).some(a => a.bot === '112') }}",
+        "rightValue": "",
+        "operator": {
+         "type": "boolean",
+         "operation": "true",
+         "singleValue": true
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    },
+    "id": "e459f3b0-425c-409c-a16e-ae91ea62215f",
+    "name": "잠금만 남음?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2.2,
+    "position": [
+     860,
+     520
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const j = $input.first().json, x = j.ctx;\nif (j.ok !== true || j.exists !== true) return [{ json: { ok: false, no_action: true, verdict: 'no_open_ticket', ctx: x } }];\nconst act = (j.actions || []).find(a => a.bot === '111' && a.action === 'lock' && a.via === 'portal');\nreturn [{ json: { ctx: { ...x, ticket_id: j.ticket_id, ip: act.target, username: act.target, results: [], manual_required: [] }, username: act.target } }];\n"
+    },
+    "id": "4f6d682c-7bf8-467f-9d85-7e315dee975d",
+    "name": "잠금 확인 입력",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1010,
+     520
+    ]
+   },
+   {
+    "parameters": {
+     "method": "GET",
+     "url": "=http://10.250.0.2:5000/api/v1/response/accounts?username={{ encodeURIComponent($json.username) }}",
+     "authentication": "genericCredentialType",
+     "genericAuthType": "httpHeaderAuth",
+     "options": {
+      "timeout": 5000,
+      "response": {
+       "response": {
+        "fullResponse": true,
+        "neverError": true
+       }
+      }
+     }
+    },
+    "id": "5bffacec-14bd-433b-bbd0-01aea8cf382e",
+    "name": "잠금 상태 조회 (포털)",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     1160,
+     520
+    ],
+    "onError": "continueRegularOutput"
+   },
+   {
+    "parameters": {
+     "jsCode": "// 담당자가 재설정(잠금 해제)했는지 포털 상태로 확인한다. 아직 잠겨 있으면 기록하지 않고 보류.\nconst r = $input.first().json;\nconst x = $('잠금 확인 입력').first().json.ctx;\nconst status = r.statusCode ?? null;\nconst locked = r.body && r.body.data ? r.body.data.locked : undefined;\nif (status !== 200 || typeof locked !== 'boolean') throw new Error('ACCOUNT_STATE_UNAVAILABLE:' + status);\nif (locked) return [{ json: { ok: false, no_action: true, verdict: 'held_still_locked', case_id: x.case_id, ticket_id: x.ticket_id,\n  detail: '계정이 아직 잠겨 있다. 담당자가 비밀번호를 재설정(잠금 해제)한 뒤 다시 호출한다.', manual_required: [`111:portal:lock:${x.username}`] } }];\nconst now = new Date().toISOString();\nconst dry = x.cfg.dry_run;\nconst res = { step: 1, result: dry ? 'dry_run' : 'released', detail: '담당자 재설정 확인(locked:false)' };\nconst base = { ctx: { ...x, results: [res] }, mode: 'record', seat: x.seat, case_id: x.case_id, group_key: x.group_key,\n  title: x.title || x.case_id, asset_id: x.asset_id, src_ip: null, username: x.username };\nif (dry) return [{ json: { ...base, stage: 'detected', event_ids: [`release-dry-${$execution.id}-unlock`], idempotency_key: `${$execution.id}-dry-unlock` } }];\nreturn [{ json: { ...base, stage: 'released', event_ids: [`release-${$execution.id}-unlock`], idempotency_key: `${$execution.id}-released-unlock`,\n  action: { bot: '111', target: x.username, via: 'portal', action: 'unlock', result: 'released', applied_verified: false,\n    effect_verified: null, effect_verified_at: null, requested_at: now, finished_at: now, n8n_execution_id: String($execution.id),\n    detail: `승인 ${x.approver} · 담당자 재설정 확인`.slice(0, 300) } } }];\n"
+    },
+    "id": "e39e2f9c-dfdb-4a81-9162-0c25c14272ab",
+    "name": "잠금 해제 판정",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1310,
+     520
+    ]
+   },
+   {
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": true,
+       "leftValue": "",
+       "typeValidation": "strict",
+       "version": 2
+      },
+      "conditions": [
+       {
+        "id": "03463b5c-82da-4afe-948a-f710c2198e60",
+        "leftValue": "={{ $json.no_action !== true }}",
+        "rightValue": "",
+        "operator": {
+         "type": "boolean",
+         "operation": "true",
+         "singleValue": true
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    },
+    "id": "c2f00aa7-6b1b-4c67-b217-7687ebce1cfc",
+    "name": "잠금 해제됨?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2.2,
+    "position": [
+     1460,
+     520
+    ]
+   },
+   {
+    "parameters": {
+     "source": "database",
+     "workflowId": {
+      "__rl": true,
+      "value": "haedamResultLog01",
+      "mode": "id"
+     },
+     "options": {}
+    },
+    "id": "8c3a04d5-ac90-404b-bd77-a85b2bc78caa",
+    "name": "잠금 기록 (haedam-10 released)",
+    "type": "n8n-nodes-base.executeWorkflow",
+    "typeVersion": 1.2,
+    "position": [
+     1610,
+     520
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "if ($input.first().json.ok !== true) throw new Error('RELEASE_RECORD_REQUIRED');\nconst r = $input.first().json; const x = r.ctx;\nconst failed = (x.results || []).some(s => !['released', 'dry_run'].includes(s.result));\nreturn [{ json: { ctx: { ...x, ticket: { ticket_id: r.ticket_id, status: r.status } }, level: failed ? 'error' : 'info',\n  case_id: x.case_id, title: failed ? '원복 중단(해제 실패)' : '원복 완료', src_ip: x.username, ticket_id: r.ticket_id,\n  result: (x.results || []).map(s => s.result).join(', '), detail: `승인 ${x.approver} · 계정 잠금 해제 확인` } }];\n"
+    },
+    "id": "c43c6431-13e3-4609-b324-e718824e333a",
+    "name": "잠금 알림 입력",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1760,
+     520
+    ]
    }
   ],
   "connections": {
@@ -849,7 +1001,7 @@
      ],
      [
       {
-       "node": "해제 대상 고르기",
+       "node": "잠금만 남음?",
        "type": "main",
        "index": 0
       }
@@ -901,6 +1053,97 @@
     ]
    },
    "posting 알림 입력": {
+    "main": [
+     [
+      {
+       "node": "Discord 알림 (haedam-11)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "잠금만 남음?": {
+    "main": [
+     [
+      {
+       "node": "잠금 확인 입력",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "해제 대상 고르기",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "잠금 확인 입력": {
+    "main": [
+     [
+      {
+       "node": "잠금 상태 조회 (포털)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "잠금 상태 조회 (포털)": {
+    "main": [
+     [
+      {
+       "node": "잠금 해제 판정",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "잠금 해제 판정": {
+    "main": [
+     [
+      {
+       "node": "잠금 해제됨?",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "잠금 해제됨?": {
+    "main": [
+     [
+      {
+       "node": "잠금 기록 (haedam-10 released)",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "처리 없음 응답",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "잠금 기록 (haedam-10 released)": {
+    "main": [
+     [
+      {
+       "node": "잠금 알림 입력",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "잠금 알림 입력": {
     "main": [
      [
       {

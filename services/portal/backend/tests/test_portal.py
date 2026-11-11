@@ -222,6 +222,21 @@ def test_response_auth_idempotency_lock_and_reset(app, actors):
             assert "password" not in json.dumps(receipt.result)
 
 
+def test_response_account_state_is_read_only_and_tracks_lock(app, actors):
+    # H2 해제 워크플로가 담당자의 재설정을 확인하는 조회. 상태를 바꾸지 않는다.
+    client = app.test_client()
+    key = {"X-Response-Key":app.config["RESPONSE_API_KEY"]}
+    path = "/api/v1/response/accounts?username=Citizen"
+    assert client.get(path).status_code == 403
+    assert client.get(path,headers=key,environ_overrides={"REMOTE_ADDR":"192.0.2.1"}).status_code == 403
+    assert client.get(path,headers=key).json["data"] == {"username":"citizen","locked":False}
+    client.post("/api/v1/response/accounts/1/lock",json={},headers={**key,"Idempotency-Key":"state-lock-0001"})
+    assert client.get(path,headers=key).json["data"]["locked"] is True
+    client.post("/api/v1/response/accounts/1/reset",json={"new_password":"State-new-password-123"},headers={**key,"Idempotency-Key":"state-reset-0001"})
+    assert client.get(path,headers=key).json["data"]["locked"] is False
+    assert client.get("/api/v1/response/accounts?username=nobody",headers=key).status_code == 404
+
+
 def test_response_locks_by_username_from_s4_events(app, actors):
     client = app.test_client()
     path = "/api/v1/response/accounts/lock"
