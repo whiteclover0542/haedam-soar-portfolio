@@ -11,7 +11,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from werkzeug.security import generate_password_hash
 
 from ..common import body, client_ip, fail, normalize_ip, ok, text
-from ..models import BlockedIp, ResponseReceipt, User, db, iso, now
+from ..models import BlockedIp, Petition, PetitionRevision, ResponseReceipt, User, db, iso, now
 from .events import emit
 
 bp = Blueprint("response", __name__, url_prefix="/api/v1/response")
@@ -138,6 +138,40 @@ def account_state():
     if not target:
         fail(404, "NOT_FOUND", "계정을 찾을 수 없습니다.")
     return ok({"username": target.username, "locked": target.locked})
+
+
+@bp.post("/petitions/<int:petition_id>/restore")
+def restore_petition(petition_id):
+    """Restore one petition from its immutable H3 pre-change snapshot."""
+    authenticate_response()
+    data = body()
+    revision_id = data.get("revision_id")
+    if type(revision_id) is not int:
+        fail(400, "VALIDATION_ERROR", "revision_id는 정수여야 합니다.")
+    request_key, fingerprint = request_digests({"petition_id": petition_id, "revision_id": revision_id})
+    petition = db.session.scalar(select(Petition).where(Petition.id == petition_id).with_for_update())
+    if not petition:
+        fail(404, "NOT_FOUND", "민원을 찾을 수 없습니다.")
+    revision = db.session.get(PetitionRevision, revision_id)
+    if not revision:
+        fail(404, "NOT_FOUND", "복원 스냅샷을 찾을 수 없습니다.")
+    if revision.petition_id != petition_id:
+        fail(409, "CONFLICT", "다른 민원의 스냅샷은 복원할 수 없습니다.")
+    previous = replayed(request_key, fingerprint)
+    if previous:
+        return ok(previous)
+    changed = (petition.status, petition.reply, petition.assignee_id) != (
+        revision.status, revision.reply, revision.assignee_id)
+    petition.status = revision.status
+    petition.reply = revision.reply
+    petition.assignee_id = revision.assignee_id
+    result = {"petition_id": petition.id, "revision_id": revision.id, "status": petition.status,
+              "reply": petition.reply, "assignee_id": petition.assignee_id, "changed": changed}
+    db.session.add(ResponseReceipt(request_key=request_key, fingerprint=fingerprint, result=result))
+    db.session.commit()
+    if changed:
+        emit("petition.restored", "success", 200, username=revision.actor.username)
+    return ok(result)
 
 
 @bp.get("/ips")

@@ -54,7 +54,7 @@
 
 **Interfaces:**
 - Produces `POST /api/v1/response/petitions/<petition_id>/restore` with JSON `{ "revision_id": <int> }`.
-- Returns the restored petition summary plus `changed`, `revision_id`, and `revoked_sessions`.
+- Returns the restored petition summary plus `changed` and `revision_id`; the workflow locks and revokes the actor session before restoration.
 
 - [ ] Write failing tests for restoring status/reply/assignee from a named revision, rejecting a revision for another petition, and replaying the same Idempotency-Key.
 - [ ] Run those tests and confirm the endpoint is absent.
