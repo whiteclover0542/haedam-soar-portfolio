@@ -54,6 +54,17 @@ def test_h1_workflows_derived():
             and "restricted: $('" in sub_text and "/accounts/lock" not in sub_text)
 
 
+def test_h2_workflow_derived():
+    main = load(Path("infra/n8n/workflows/haedam-36-h2-main.json"))
+    assert main["id"] == "haedamH2Main01"
+    text = json.dumps(main, ensure_ascii=False)
+    assert "haedam-h2" in text                                   # 전용 webhook 경로
+    assert "'H2'" in text and "case_id must be H2" in text        # H2만 처리
+    assert "haedamAccountLock01" in text and "haedamPortalIp01" in text  # 계정 잠금 + IP 차단
+    assert "haedamPfsense01" not in text                          # pfSense 조치는 교체됨
+    assert "action: 'lock'" in text and "bot: '111'" in text and "bot: '112'" in text
+
+
 def test_discord_is_optional_and_wired_when_set():
     assert "discordWebhookApi" not in {c["type"] for c in build_credentials(ENV)}
     creds = build_credentials({**ENV, "DISCORD_WEBHOOK_URL": "https://example.invalid/webhook"})

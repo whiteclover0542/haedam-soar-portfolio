@@ -25,11 +25,13 @@ INPUTS = [
 ]
 NOTIFICATIONS = {"haedam-s1": "infra/graylog/notifications/s1-n8n-haedam-s1.json",
                  "haedam-s8-s10": "lab/s8s10/graylog/s8-s10-n8n-notification.json",
-                 "haedam-h1": "infra/graylog/notifications/h1-n8n-haedam-h1.json"}
+                 "haedam-h1": "infra/graylog/notifications/h1-n8n-haedam-h1.json",
+                 "haedam-h2": "infra/graylog/notifications/h2-n8n-haedam-h2.json"}
 DEFINITIONS = {"lab/s1s4/graylog/s1-login-bruteforce.json": "haedam-s1",
                "lab/s8s10/graylog/s8-scan-then-login.json": "haedam-s8-s10",
                "lab/s8s10/graylog/s10-three-layer.json": "haedam-s8-s10",
-               "lab/h1/graylog/h1-petition-flood.json": "haedam-h1"}
+               "lab/h1/graylog/h1-petition-flood.json": "haedam-h1",
+               "lab/h2/graylog/h2-petition-access-denied.json": "haedam-h2"}
 
 
 def replace_stream_ids(defn, ids):
