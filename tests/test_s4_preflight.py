@@ -14,19 +14,19 @@ def load_preflight_module():
     return module
 
 
-def test_s4_preflight_keeps_the_case_offline_until_both_live_imports_are_explicitly_enabled():
+def test_s4_preflight_confirms_both_imports_while_the_workflow_file_defaults_to_observe_mode():
     preflight = load_preflight_module()
 
     report = preflight.review()
 
     assert report["case_id"] == "S4"
     assert report["execution"] is False
-    assert report["ready_for_live_import"] is False
+    assert report["ready_for_live_import"] is True
     assert report["checks"] == {
         "offline_input": True,
         "graylog_definition": True,
         "workflow_inactive": True,
         "workflow_dry_run": True,
-        "graylog_not_bootstrapped": True,
-        "n8n_not_loaded": True,
+        "graylog_bootstrapped": True,
+        "n8n_loaded": True,
     }

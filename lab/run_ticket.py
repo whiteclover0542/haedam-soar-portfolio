@@ -1,9 +1,11 @@
 """Run one ticket end to end on the single-PC stack and append the result to docs/tickets/<ID>/runs.jsonl.
 
-python lab/run_ticket.py {S1|S8|S10|H1|H2} [--restore] [--baseline]
+python lab/run_ticket.py {S1|S4|S8|S10|H1|H2} [--restore] [--baseline]
 Steps: precheck → input from haedam-attacker → wait for the ticket (≤180 s) → effect (attacker blocked, normal 200)
 → with --restore: release via n8n haedam-50 (pfSense first, then portal) → attacker 200 again.
 H2 restore follows the person's order: release (IP) → held while still locked → person resets the password → release again.
+S4 (account takeover): 5 wrong passwords then the right one from the attacker, holding that session until it is revoked;
+restore = the person resets the password, then haedam-50 closes the ticket; the owner logs in with the new password.
 Graylog must be in live mode: python infra/graylog/bootstrap.py --live
 """
 import argparse
@@ -18,10 +20,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = {"S1": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11", "H2": "203.0.113.11"}
-WINDOW_MIN = {"S1": 30, "S8": 15, "S10": 15, "H1": 10, "H2": 5}
-SEAT = {"S1": "A", "S8": "B", "S10": "B", "H1": "A", "H2": "C"}
+SRC = {"S1": "203.0.113.11", "S4": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11", "H2": "203.0.113.11"}
+# S4: fresh account per run, but each run makes ~8 logins from the same source and the portal allows 20 per source
+# in 5 minutes (LOGIN_RATE_LIMIT), so runs closer than 5 minutes get 429 instead of the checked status.
+WINDOW_MIN = {"S1": 30, "S4": 5, "S8": 15, "S10": 15, "H1": 10, "H2": 5}
+SEAT = {"S1": "A", "S4": "A", "S8": "B", "S10": "B", "H1": "A", "H2": "C"}
 H1_POSTS = 8  # 탐지 기준 N=5보다 넉넉히(초안). 기준선은 --baseline
+S4_FAILS, S4_HOLD = 5, 180  # 탐지: 10분 안 실패·성공 합계 6건 이상(card(rule)>1, count()>5)
 H2_VIEWS = {False: 3, True: 2}  # 탐지는 5분 안 3건 이상(초안). 기준선: 잘못 연 링크 2건
 RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting", "lock")
 NORMAL = "203.0.113.100"
@@ -207,7 +212,7 @@ def main():
         run["input_at"] = datetime.now(timezone.utc).isoformat()
         run["input"] = portal_login("haedam-normal", NORMAL, "fail", user, "3")["statuses"]
         run["input"].append(portal_login("haedam-normal", NORMAL, "login", user, pw=pw)["statuses"][0])
-        group_key = user if case == "S1" else NORMAL  # S1 keys on username+src_ip; S8/S10 on src_ip
+        group_key = user if case in ("S1", "S4") else NORMAL  # S1·S4 key on username+src_ip; S8/S10 on src_ip
     elif case == "H1":
         user, pw = f"zz_a_h1_{run['run_id']}", secrets.token_urlsafe(12)
         who, at = ("haedam-normal", NORMAL) if a.baseline else ("haedam-attacker", src)
@@ -223,6 +228,13 @@ def main():
         else:
             run["input"] = portal_login(who, at, "post", user, str(H1_POSTS), pw=pw)
         group_key = user
+    elif case == "S4":
+        # The owner signs up from the normal source; the attacker, who knows the password, guesses wrong 5 times first.
+        user, pw = f"zz_a_s4_{run['run_id']}", secrets.token_urlsafe(12)
+        run["register"] = portal_login("haedam-normal", NORMAL, "register", user, pw=pw)["statuses"]
+        run["input_at"] = datetime.now(timezone.utc).isoformat()
+        run["input"] = portal_login("haedam-attacker", src, "takeover", user, str(S4_FAILS), f"--hold={S4_HOLD}", pw=pw)
+        group_key = user
     elif case == "S1":
         user, pw = f"zz_a_s1_{run['run_id']}", secrets.token_urlsafe(12)
         run["register"] = portal_login("haedam-normal", NORMAL, "register", user, pw=pw)["statuses"]
@@ -236,7 +248,9 @@ def main():
            "--run-id", run["run_id"], "--out", f"/tmp/{run['run_id']}.json", "--execute")
         run["input"] = [x["status"] for x in json.loads(sh("docker", "exec", "haedam-attacker", "cat", f"/tmp/{run['run_id']}.json"))["http"]]
         group_key = src
-    before = set(tickets_for(group_key))  # tickets already present for this key, so we only count ones our input creates
+    # Tickets already present for this key, so we only count ones our input creates. S4's input waits until the session
+    # is revoked (after the ticket exists) and its account is new, so nothing came before it.
+    before = set() if case == "S4" and not a.baseline else set(tickets_for(group_key))
     print("input", run["input"], flush=True)
 
     # Baseline waits for any new ticket (no S10 pfSense requirement); a real run keeps the case-specific wait.
@@ -270,6 +284,9 @@ def main():
             run["effect"] = {"attacker": http_code("haedam-attacker", src),
                              "attacker_login": portal_login("haedam-normal", NORMAL, "login", group_key, pw=pw)["statuses"][0],
                              "normal": str(portal_login("haedam-normal", NORMAL, "view", victim, f"--ids={ids[0]}", pw=vpw)["statuses"][0])}
+        if case == "S4":  # the stolen session is gone and the right password no longer opens the locked account
+            run["effect"]["attacker"] = str(portal_login("haedam-attacker", src, "login", group_key, pw=pw)["statuses"][0])
+            run["effect"]["session_revoked"] = run["input"]["session"][-1] == 401
         if case == "S1":
             run["effect"]["normal_login_same_user"] = portal_login("haedam-normal", NORMAL, "login", group_key, pw=pw)["statuses"]
         if a.restore and case == "H2":
@@ -282,6 +299,17 @@ def main():
                               "attacker_after": http_code("haedam-attacker", src),
                               "login_after": portal_login("haedam-attacker", src, "login", group_key, pw=new_pw)["statuses"][0],
                               "others_after": str(portal_login("haedam-attacker", src, "view", group_key, f"--ids={ids[0]}", pw=new_pw)["statuses"][0]),
+                              "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"],
+                              "unauth_release": unauth_release_code(case)}
+            run["restore"]["permission_enforced"] = run["restore"]["unauth_release"] in ("401", "403")
+        elif a.restore and case == "S4":
+            new_pw = secrets.token_urlsafe(14)
+            reset = portal_reset(e, run["input"]["user_id"], new_pw)
+            rel = release(e, case, ticket["case_id"], group_key)
+            # attacker_after = the owner's login with the new password (what a normal user gets: 200)
+            run["restore"] = {"reset": reset, "verdict": rel.get("verdict"),
+                              "attacker_after": str(portal_login("haedam-normal", NORMAL, "login", group_key, pw=new_pw)["statuses"][0]),
+                              "old_password_after": portal_login("haedam-attacker", src, "login", group_key, pw=pw)["statuses"][0],
                               "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"],
                               "unauth_release": unauth_release_code(case)}
             run["restore"]["permission_enforced"] = run["restore"]["unauth_release"] in ("401", "403")
@@ -298,12 +326,16 @@ def main():
                               "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"],
                               "unauth_release": unauth_release_code(case)}
             run["restore"]["permission_enforced"] = run["restore"]["unauth_release"] in ("401", "403")
-        refused, fine = (("429",), "201") if case == "H1" else (("403", "000"), "200")
+        refused, fine = (("429",), "201") if case == "H1" else (("401",), "200") if case == "S4" else (("403", "000"), "200")
         ok = bool(blocked) and run["effect"]["attacker"] in refused and run["effect"]["normal"] == fine
         if case == "S10":  # the point of S10 is the perimeter block; a portal-only 403 is not a pass
             ok = ok and any(x[0] == "pfsense" for x in blocked) and run["effect"]["attacker"] == "000"
         if case == "H2":  # both responses applied and the account refused even from another source
             ok = ok and {x[1] for x in blocked} >= {"block", "lock"} and run["effect"]["attacker_login"] == 401
+        if case == "S4":  # 5×401 then 200, the stolen session revoked, the account locked
+            ok = ok and run["input"]["statuses"] == [401] * S4_FAILS + [200] and run["effect"]["session_revoked"]                 and {x[1] for x in blocked} >= {"lock"}
+        if a.restore and case == "S4":  # the old (stolen) password stays useless after the reset
+            ok = ok and run["restore"]["old_password_after"] == 401 and run["restore"]["status_after"] == "restored"
         if a.restore:
             ok = ok and run["restore"]["attacker_after"] == fine and run["restore"].get("permission_enforced")
         if a.restore and case == "H2":  # held until the person resets, then closed; other citizens' petitions stay 403

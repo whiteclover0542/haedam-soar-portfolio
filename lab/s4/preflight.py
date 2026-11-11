@@ -51,16 +51,14 @@ def review() -> dict:
         ),
         "workflow_inactive": workflow["active"] is False,
         "workflow_dry_run": "dry_run: true" in workflow_code,
-        "graylog_not_bootstrapped": str(DEFINITION_PATH.relative_to(ROOT)).replace("\\", "/") not in definitions,
-        "n8n_not_loaded": workflow["id"] not in scope,
+        "graylog_bootstrapped": str(DEFINITION_PATH.relative_to(ROOT)).replace("\\", "/") in definitions,
+        "n8n_loaded": workflow["id"] in scope,
     }
     return {
         "case_id": "S4",
         "execution": False,
         "checks": checks,
-        "ready_for_live_import": all(checks.values()) and not (
-            checks["graylog_not_bootstrapped"] or checks["n8n_not_loaded"]
-        ),
+        "ready_for_live_import": all(checks.values()),
     }
 
 
