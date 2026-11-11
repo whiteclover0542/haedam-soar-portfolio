@@ -61,7 +61,8 @@ def test_h2_effect_checks_victim_petition_with_portal_view_contract(monkeypatch)
 
 def test_h2_release_resets_the_locked_account_before_releasing_again(monkeypatch):
     panel.USERS["H2"] = {"user": "attacker", "pw": "old", "user_id": 7, "foreign_ids": [41]}
-    verdicts = iter([{"verdict": "held_still_locked"}, {"verdict": "released", "steps": [{"step": 2, "result": "released"}]}])
+    verdicts = iter([{"verdict": "released", "manual_required": ["111:portal:lock:attacker"]},
+                     {"verdict": "released", "steps": [{"step": 2, "result": "released"}]}])
     resets = []
     monkeypatch.setattr(panel, "latest_ticket", lambda case: {"case_id": "H2"})
     monkeypatch.setattr(panel, "release_webhook", lambda case, case_id: next(verdicts))
@@ -73,4 +74,4 @@ def test_h2_release_resets_the_locked_account_before_releasing_again(monkeypatch
     log = panel.release("H2")
 
     assert resets == [7] and panel.USERS["H2"]["pw"] != "old"
-    assert [x["result"] for x in log] == ["held_still_locked", "200", ["포털 released"], "200", [403]]
+    assert [x["result"] for x in log] == [["111:portal:lock:attacker"], "200", ["포털 released"], "200", [403]]

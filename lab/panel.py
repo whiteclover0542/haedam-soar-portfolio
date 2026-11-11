@@ -202,14 +202,17 @@ def release(case):
                 {"step": "해제 후 공격 계정 민원 1건", "cmd": "", "result": after}]
     rel = release_webhook(case, t["case_id"])
     pre = []
-    if case == "H2" and rel.get("verdict") == "held_still_locked":  # 잠긴 계정은 사람이 비밀번호를 재설정한 뒤에만 풀린다
+    # H2: 1차 해제는 IP만 풀고 계정 잠금을 manual_required로 남긴다(다시 부르면 held_still_locked).
+    # 잠긴 계정은 사람이 비밀번호를 재설정한 뒤에만 풀리므로, 재설정 후 다시 해제해 티켓을 닫는다.
+    if case == "H2" and (rel.get("manual_required") or rel.get("verdict") == "held_still_locked"):
         u = USERS["H2"]
         u["pw"] = secrets.token_urlsafe(14)
         reset = portal_reset(env(), u["user_id"], u["pw"])
-        pre = [{"step": "haedam-50 1차 해제: 계정이 잠겨 있어 보류", "cmd": "POST /webhook/haedam-release", "result": rel.get("verdict")},
+        pre = [{"step": "haedam-50 1차 해제: IP만 풀림, 계정 잠금은 사람이 해제", "cmd": "POST /webhook/haedam-release",
+                "result": rel.get("manual_required") or rel.get("verdict")},
                {"step": "담당자: 공격 계정 비밀번호 재설정(잠금 해제)", "cmd": "POST /api/v1/response/accounts/<id>/reset", "result": reset}]
         rel = release_webhook(case, t["case_id"])
-    steps = [f"{'pfSense' if s.get('step') == 1 else '포털'} {s.get('result')}" for s in rel.get("steps") or []]
+    steps = [f"{'pfSense' if case != 'H2' and s.get('step') == 1 else '포털'} {s.get('result')}" for s in rel.get("steps") or []]
     after = http_code("haedam-attacker", SRC[case])
     if case in RUNS:
         RUNS[case]["released"] = {"steps": steps, "attacker": after}
@@ -295,6 +298,7 @@ def timeline(case):
          "text": (f"{' → '.join(rel['steps']) or '단계 없음'} · 공격자 다시 {rel['attacker']}." if rel
                   else "효과를 확인했으면 [해제]를 누릅니다. " + ("담당자가 포털 대응 API로 작성 제한을 풉니다." if case == "H1"
                                                          else "관리자가 담당자 계정 잠금을 풉니다." if case == "H3"
+                                                         else "IP 차단을 풀고, 잠긴 계정은 비밀번호 재설정 뒤 풉니다." if case == "H2"
                                                          else "pfSense를 먼저 풀고 포털을 풉니다."))},
     ]
     return {"steps": steps, "elapsed": elapsed, "ticket": t and {k: t[k] for k in ("ticket_id", "status", "mttd_seconds")}}
