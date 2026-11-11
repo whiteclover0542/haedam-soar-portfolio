@@ -114,8 +114,9 @@ def update(petition_id):
         fail(409, "CONFLICT", "접수 → 처리 중 → 완료 순서로 처리해 주세요.")
     reply = text(data, "reply", 10, 3000) if target == "completed" else ""
     previous = petition.status
-    db.session.add(PetitionRevision(petition_id=petition.id, actor_id=g.user.id, status=petition.status,
-                                    reply=petition.reply, assignee_id=petition.assignee_id, version=petition.version))
+    revision = PetitionRevision(petition_id=petition.id, actor_id=g.user.id, status=petition.status,
+                                reply=petition.reply, assignee_id=petition.assignee_id, version=petition.version)
+    db.session.add(revision)
     petition.status, petition.reply = target, reply
     db.session.add(PetitionHistory(petition_id=petition.id, actor_id=g.user.id, from_status=previous, to_status=target))
     try:
