@@ -15,7 +15,8 @@ def test_state_orders_connected_and_unconnected_cases_without_running_unconnecte
     current = panel.state()
 
     assert list(current) == ["H1", "H2", "H3", "S1", "S4", "S7", "S8", "S10", "S12"]
-    for case in ("H3", "S4", "S7", "S12"):
+    assert "pending" not in current["H3"] and panel.EXPECT["H3"][0] == "401"
+    for case in ("S4", "S7", "S12"):
         assert current[case]["pending"] is True
         assert current[case]["steps"][0]["state"] == "wait"
 
@@ -56,3 +57,20 @@ def test_h2_effect_checks_victim_petition_with_portal_view_contract(monkeypatch)
     assert result[0]["result"] == "403"
     assert result[1]["result"] == "200"
     assert ("haedam-normal", panel.NORMAL, "view", "victim", ("--ids=41",)) in calls
+
+
+def test_h2_release_resets_the_locked_account_before_releasing_again(monkeypatch):
+    panel.USERS["H2"] = {"user": "attacker", "pw": "old", "user_id": 7, "foreign_ids": [41]}
+    verdicts = iter([{"verdict": "held_still_locked"}, {"verdict": "released", "steps": [{"step": 2, "result": "released"}]}])
+    resets = []
+    monkeypatch.setattr(panel, "latest_ticket", lambda case: {"case_id": "H2"})
+    monkeypatch.setattr(panel, "release_webhook", lambda case, case_id: next(verdicts))
+    monkeypatch.setattr(panel, "portal_reset", lambda e, user_id, pw: resets.append(user_id) or "200")
+    monkeypatch.setattr(panel, "env", lambda: {})
+    monkeypatch.setattr(panel, "http_code", lambda *_: "200")
+    monkeypatch.setattr(panel, "portal_login", lambda *a, pw=None: {"statuses": [403]})
+
+    log = panel.release("H2")
+
+    assert resets == [7] and panel.USERS["H2"]["pw"] != "old"
+    assert [x["result"] for x in log] == ["held_still_locked", "200", ["포털 released"], "200", [403]]

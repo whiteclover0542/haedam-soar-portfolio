@@ -49,7 +49,7 @@ def run_h2(portal_login, *, attacker, attacker_password, victim, victim_password
                        f"--ids={own_ids[0]}", pw=attacker_password)
     if own.get("login") != 200 or own["statuses"] != [200]:
         raise RuntimeError("H2 self-petition check failed")
-    return {"attacker": attacker, "victim": victim, "victim_petition_ids": petition_ids,
+    return {"attacker": attacker, "attacker_user_id": denied.get("user_id"), "victim": victim, "victim_petition_ids": petition_ids,
             "attacker_petition_id": own_ids[0], "statuses": denied["statuses"], "own_status": own["statuses"][0]}
 
 
