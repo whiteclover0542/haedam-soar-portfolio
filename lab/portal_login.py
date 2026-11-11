@@ -64,7 +64,8 @@ def main():
         status, raw = s.call("POST", "/api/v1/auth/login", {"username": a.username, "password": os.environ["PW"]})
         out["login"] = status
         if status == 200:
-            s.token = json.loads(raw)["data"]["csrf_token"]
+            data = json.loads(raw)["data"]
+            s.token, out["user_id"] = data["csrf_token"], data["user"]["id"]
     if a.mode == "post":
         out["ids"] = []
         for i in range(a.count):

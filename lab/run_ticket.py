@@ -1,8 +1,9 @@
 """Run one ticket end to end on the single-PC stack and append the result to docs/tickets/<ID>/runs.jsonl.
 
-python lab/run_ticket.py {S1|S8|S10} [--restore]
+python lab/run_ticket.py {S1|S8|S10|H1|H2} [--restore] [--baseline]
 Steps: precheck → input from haedam-attacker → wait for the ticket (≤180 s) → effect (attacker blocked, normal 200)
 → with --restore: release via n8n haedam-50 (pfSense first, then portal) → attacker 200 again.
+H2 restore follows the person's order: release (IP) → held while still locked → person resets the password → release again.
 Graylog must be in live mode: python infra/graylog/bootstrap.py --live
 """
 import argparse
@@ -17,11 +18,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = {"S1": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11"}
-WINDOW_MIN = {"S1": 30, "S8": 15, "S10": 15, "H1": 10}
-SEAT = {"S1": "A", "S8": "B", "S10": "B", "H1": "A"}
+SRC = {"S1": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11", "H2": "203.0.113.11"}
+WINDOW_MIN = {"S1": 30, "S8": 15, "S10": 15, "H1": 10, "H2": 5}
+SEAT = {"S1": "A", "S8": "B", "S10": "B", "H1": "A", "H2": "C"}
 H1_POSTS = 8  # 탐지 기준 N=5보다 넉넉히(초안). 기준선은 --baseline
-RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting")
+H2_VIEWS = {False: 3, True: 2}  # 탐지는 5분 안 3건 이상(초안). 기준선: 잘못 연 링크 2건
+RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting", "lock")
 NORMAL = "203.0.113.100"
 TICKETS = "http://127.0.0.1:8089/api/v1/tickets"
 
@@ -81,6 +83,26 @@ def portal_posting(e, username, restricted):
           + ("true" if restricted else "false") + "})}).then(r=>console.log(r.status))")
     return sh("docker", "exec", "haedam-n8n", "node", "-e", js,
               env_vars={"K": e["PORTAL_RESPONSE_KEY"], "I": f"run-ticket-{username}-{int(restricted)}", "U": username})
+
+
+def portal_reset(e, user_id, password):
+    """Person's unlock for H2: password reset through the response API (the only way an account is unlocked)."""
+    js = ("fetch('http://10.250.0.2:5000/api/v1/response/accounts/'+process.env.U+'/reset',{method:'POST',headers:{'X-Response-Key':"
+          "process.env.K,'Idempotency-Key':process.env.I,'Content-Type':'application/json'},body:JSON.stringify({new_password:"
+          "process.env.P})}).then(r=>console.log(r.status))")
+    return sh("docker", "exec", "haedam-n8n", "node", "-e", js,
+              env_vars={"K": e["PORTAL_RESPONSE_KEY"], "I": f"run-ticket-reset-{user_id}", "U": str(user_id), "P": password})
+
+
+def release(e, case, case_id, group_key):
+    """Release webhook (haedam-50) as the person calls it after checking the effect."""
+    body = json.dumps({"seat": SEAT[case], "case_id": case_id, "group_key": group_key, "approver": "run_ticket",
+                       "dry_run": False, "reason": "lab run restore"}).encode()
+    req = urllib.request.Request("http://127.0.0.1:5678/webhook/haedam-release", data=body, method="POST",
+                                 headers={"Content-Type": "application/json", "X-Haedam-Key": e["N8N_WEBHOOK_KEY"]})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        rel = json.loads(r.read())
+    return rel[0] if isinstance(rel, list) else rel
 
 
 def portal_blocked(e):
@@ -165,7 +187,19 @@ def main():
         raise SystemExit("precheck: " + ", ".join(problems))
 
     run = {"case": case, "src": src, "run_id": now.strftime("%m%d%H%M%S")}
-    if a.baseline and case != "H1":
+    if case == "H2":
+        # Victim files petitions from the normal source; a citizen at .11 opens them (403 each). The baseline uses the
+        # same unprotected source (.11 is not a protected normal source), so a false positive would show up as a ticket.
+        victim, vpw = f"zz_v_h2_{run['run_id']}", secrets.token_urlsafe(12)
+        portal_login("haedam-normal", NORMAL, "register", victim, pw=vpw)
+        ids = portal_login("haedam-normal", NORMAL, "post", victim, "3", pw=vpw)["ids"]
+        user, pw = f"zz_a_h2_{run['run_id']}", secrets.token_urlsafe(12)
+        run["baseline"] = a.baseline or None
+        run["register"] = portal_login("haedam-attacker", src, "register", user, pw=pw)["statuses"]
+        run["input_at"] = datetime.now(timezone.utc).isoformat()
+        run["input"] = portal_login("haedam-attacker", src, "view", user, "--ids=" + ",".join(map(str, ids[:H2_VIEWS[a.baseline]])), pw=pw)
+        group_key = user
+    elif a.baseline and case != "H1":
         # Normal citizen from the normal source: 3 wrong passwords then a success — below every S1/S8/S10 threshold.
         user, pw = f"zz_base_{case.lower()}_{run['run_id']}", secrets.token_urlsafe(12)
         run["src"], run["baseline"] = NORMAL, True
@@ -232,22 +266,33 @@ def main():
             portal_login("haedam-normal", NORMAL, "register", other, pw=other_pw)
             run["effect"] = {"attacker": str(again["statuses"][0]), "attacker_login": again["login"], "attacker_list": again["list"],
                              "normal": str(portal_login("haedam-normal", NORMAL, "post", other, "1", pw=other_pw)["statuses"][0])}
+        if case == "H2":  # IP blocked, the account locked even from another source, the victim unaffected
+            run["effect"] = {"attacker": http_code("haedam-attacker", src),
+                             "attacker_login": portal_login("haedam-normal", NORMAL, "login", group_key, pw=pw)["statuses"][0],
+                             "normal": str(portal_login("haedam-normal", NORMAL, "view", victim, f"--ids={ids[0]}", pw=vpw)["statuses"][0])}
         if case == "S1":
             run["effect"]["normal_login_same_user"] = portal_login("haedam-normal", NORMAL, "login", group_key, pw=pw)["statuses"]
-        if a.restore and case == "H1":
+        if a.restore and case == "H2":
+            first, held = release(e, case, ticket["case_id"], group_key), release(e, case, ticket["case_id"], group_key)
+            new_pw = secrets.token_urlsafe(14)
+            reset = portal_reset(e, run["input"]["user_id"], new_pw)
+            final = release(e, case, ticket["case_id"], group_key)
+            run["restore"] = {"first": [first.get("verdict"), first.get("manual_required")], "held": held.get("verdict"), "reset": reset,
+                              "verdict": final.get("verdict"), "steps": [(s.get("step"), s.get("result")) for s in final.get("steps") or []],
+                              "attacker_after": http_code("haedam-attacker", src),
+                              "login_after": portal_login("haedam-attacker", src, "login", group_key, pw=new_pw)["statuses"][0],
+                              "others_after": str(portal_login("haedam-attacker", src, "view", group_key, f"--ids={ids[0]}", pw=new_pw)["statuses"][0]),
+                              "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"],
+                              "unauth_release": unauth_release_code(case)}
+            run["restore"]["permission_enforced"] = run["restore"]["unauth_release"] in ("401", "403")
+        elif a.restore and case == "H1":
             run["restore"] = {"verdict": "released_by_person", "steps": [(1, portal_posting(e, group_key, False))],
                               "attacker_after": str(portal_login("haedam-attacker", src, "post", group_key, "1", pw=pw)["statuses"][0]),
                               "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"],
                               "unauth_release": unauth_release_code(case)}
             run["restore"]["permission_enforced"] = run["restore"]["unauth_release"] in ("401", "403")
         elif a.restore:
-            body = json.dumps({"seat": SEAT[case], "case_id": ticket["case_id"], "group_key": group_key, "approver": "run_ticket",
-                               "dry_run": False, "reason": "lab run restore"}).encode()
-            req = urllib.request.Request("http://127.0.0.1:5678/webhook/haedam-release", data=body, method="POST",
-                                         headers={"Content-Type": "application/json", "X-Haedam-Key": e["N8N_WEBHOOK_KEY"]})
-            with urllib.request.urlopen(req, timeout=120) as r:
-                rel = json.loads(r.read())
-            rel = rel[0] if isinstance(rel, list) else rel
+            rel = release(e, case, ticket["case_id"], group_key)
             run["restore"] = {"verdict": rel.get("verdict"), "steps": [(s.get("step"), s.get("result")) for s in rel.get("steps") or []],
                               "attacker_after": http_code("haedam-attacker", src),
                               "status_after": get(f"{TICKETS}/{ticket['ticket_id']}")["ticket"]["status"],
@@ -257,8 +302,14 @@ def main():
         ok = bool(blocked) and run["effect"]["attacker"] in refused and run["effect"]["normal"] == fine
         if case == "S10":  # the point of S10 is the perimeter block; a portal-only 403 is not a pass
             ok = ok and any(x[0] == "pfsense" for x in blocked) and run["effect"]["attacker"] == "000"
+        if case == "H2":  # both responses applied and the account refused even from another source
+            ok = ok and {x[1] for x in blocked} >= {"block", "lock"} and run["effect"]["attacker_login"] == 401
         if a.restore:
             ok = ok and run["restore"]["attacker_after"] == fine and run["restore"].get("permission_enforced")
+        if a.restore and case == "H2":  # held until the person resets, then closed; other citizens' petitions stay 403
+            r = run["restore"]
+            ok = ok and r["held"] == "held_still_locked" and r["status_after"] == "restored" and r["login_after"] == 200 \
+                and r["others_after"] == "403"
         run["result"] = "pass" if ok else "fail"
     out = ROOT / f"docs/tickets/{case}/runs.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
