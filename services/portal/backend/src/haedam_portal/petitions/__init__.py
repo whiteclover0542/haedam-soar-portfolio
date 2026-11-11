@@ -123,5 +123,6 @@ def update(petition_id):
     except StaleDataError:
         db.session.rollback()
         fail(409, "CONFLICT", "다른 요청이 먼저 처리했습니다. 새로고침해 주세요.")
-    emit("petition.updated", "success", 200, username=g.user.username)
+    emit("petition.updated", "success", 200, username=g.user.username,
+         petition_id=petition.id, revision_id=revision.id)
     return ok(petition.public(True))

@@ -41,7 +41,7 @@ def emit(kind, outcome, status, username=None, **details):
                    "_event_type": kind, "_src_ip": event["src_ip"], "_username": username or "anonymous",
                    "_asset_id": event["asset_id"], "_status": status, "_path": route[:120],
                    "_portal_event": json.dumps(event, ensure_ascii=False)}
-        payload.update({f"_{name}": details[name] for name in ("file_key", "target_ip") if name in details})
+        payload.update({f"_{name}": details[name] for name in ("file_key", "target_ip", "petition_id", "revision_id") if name in details})
         target = (current_app.config["GELF_HOST"], current_app.config["GELF_PORT"])
         if current_app.config.get("GELF_TRANSPORT") == "tcp":
             _enqueue_tcp(target, json.dumps(payload).encode())

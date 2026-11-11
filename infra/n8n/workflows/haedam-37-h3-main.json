@@ -1,0 +1,17 @@
+[
+  {
+    "id": "haedamH3Main01",
+    "name": "haedam-37 H3 petition snapshot restore",
+    "active": false,
+    "nodes": [
+      {"id":"webhook","name":"Webhook","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[0,0],"parameters":{"httpMethod":"POST","path":"haedam-h3","responseMode":"responseNode","authentication":"headerAuth","options":{}},"credentials":{"httpHeaderAuth":{"id":"","name":"haedam-h3 caller"}}},
+      {"id":"validate","name":"Validate H3","type":"n8n-nodes-base.code","typeVersion":2,"position":[220,0],"parameters":{"jsCode":"const t=$input.first().json.body||{}; const required=['event_id','asset_id','username','petition_id','revision_id','case_id']; const missing=required.filter(k=>!t[k]); if(missing.length||t.case_id!=='H3') return [{json:{ok:false,verdict:'invalid_input',missing,detail:'case_id must be H3'}}]; return [{json:{ok:true,ctx:{...t,cfg:{dry_run:true,store_real:false}}}];"}},
+      {"id":"lock-input","name":"Lock input","type":"n8n-nodes-base.code","typeVersion":2,"position":[440,0],"parameters":{"jsCode":"const x=$input.first().json.ctx; return [{json:{ctx:x,ticket_id:'H3-'+x.event_id,dry_run:x.cfg.dry_run,action:'lock',username:x.username}}];"}},
+      {"id":"lock","name":"Lock account","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[660,0],"parameters":{"source":"database","workflowId":{"__rl":true,"value":"haedamAccountLock01","mode":"id"},"options":{}}},
+      {"id":"restore","name":"Restore snapshot","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[880,0],"parameters":{"method":"POST","url":"=http://10.250.0.2:5000/api/v1/response/petitions/{{ $('Validate H3').first().json.ctx.petition_id }}/restore","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Idempotency-Key","value":"={{ 'h3-' + $('Validate H3').first().json.ctx.event_id + '-restore' }}"}]},"sendBody":true,"specifyBody":"json","jsonBody":"={{ JSON.stringify({ revision_id: $('Validate H3').first().json.ctx.revision_id }) }}","options":{"timeout":5000}},"credentials":{"httpHeaderAuth":{"id":"","name":"haedam-portal-response"}}},
+      {"id":"respond","name":"Respond","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[1100,0],"parameters":{"respondWith":"allIncomingItems","options":{}}}
+    ],
+    "connections":{"Webhook":{"main":[[{"node":"Validate H3","type":"main","index":0}]]},"Validate H3":{"main":[[{"node":"Lock input","type":"main","index":0}]]},"Lock input":{"main":[[{"node":"Lock account","type":"main","index":0}]]},"Lock account":{"main":[[{"node":"Restore snapshot","type":"main","index":0}]]},"Restore snapshot":{"main":[[{"node":"Respond","type":"main","index":0}]]}},
+    "settings":{"executionOrder":"v1"}
+  }
+]

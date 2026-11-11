@@ -1,0 +1,24 @@
+{
+  "title": "H3 staff petition updates",
+  "description": "Same staff account changes three petition results within five minutes.",
+  "priority": 2,
+  "alert": true,
+  "config": {
+    "type": "aggregation-v1",
+    "query": "source:haedam-portal AND event_type:\"petition.updated\" AND revision_id:*",
+    "query_parameters": [], "filters": [], "streams": ["REPLACE_haedam-portal_stream_id"], "stream_categories": [],
+    "group_by": ["username"], "series": [{"type": "count", "id": "count()", "field": null}],
+    "conditions": {"expression": {"expr": ">", "left": {"expr": "number-ref", "ref": "count()"}, "right": {"expr": "number", "value": 2}}},
+    "search_within_ms": 300000, "execute_every_ms": 60000, "use_cron_scheduling": false, "cron_expression": null, "cron_timezone": null, "event_limit": 100
+  },
+  "field_spec": {
+    "username": {"data_type": "string", "providers": [{"type": "template-v1", "template": "${source.username}", "require_values": true}]},
+    "petition_id": {"data_type": "long", "providers": [{"type": "template-v1", "template": "${source.petition_id}", "require_values": true}]},
+    "revision_id": {"data_type": "long", "providers": [{"type": "template-v1", "template": "${source.revision_id}", "require_values": true}]},
+    "case_id": {"data_type": "string", "providers": [{"type": "template-v1", "template": "H3", "require_values": true}]}
+  },
+  "key_spec": ["username"],
+  "notification_settings": {"grace_period_ms": 300000, "backlog_size": 20},
+  "notifications": [],
+  "storage": [{"type": "persist-to-streams-v1", "streams": ["000000000000000000000002"]}]
+}
