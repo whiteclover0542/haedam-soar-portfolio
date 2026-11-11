@@ -19,3 +19,11 @@ def test_h2_detected_record_is_accepted():
                           "src_ip": "203.0.113.11", "username": "zz_a_h2",
                           "event_ids": ["01H2ACCESSDENIED"], "action": None})
     assert "H2" in dashboard.CASES
+
+
+def test_h3_detected_record_is_accepted():
+    validate.record_body({"seat": "C", "case_id": "H3", "group_key": "zz_h3_staff", "stage": "detected",
+                          "title": "H3 petition integrity change", "asset_id": "haedam-portal",
+                          "src_ip": None, "username": "zz_h3_staff", "event_ids": ["01H3INTEGRITY"],
+                          "action": None})
+    assert "H3" in dashboard.CASES
