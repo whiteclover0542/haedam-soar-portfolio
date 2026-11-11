@@ -3,7 +3,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm.exc import StaleDataError
 
 from ..common import body, fail, ok, pagination, require, text
-from ..models import Petition, PetitionHistory, db
+from ..models import Petition, PetitionHistory, PetitionRevision, db
 from ..integration.events import emit
 
 CATEGORIES = ["도로·교통", "환경·청소", "공원·녹지", "안전·시설", "생활·복지", "기타"]
@@ -114,6 +114,8 @@ def update(petition_id):
         fail(409, "CONFLICT", "접수 → 처리 중 → 완료 순서로 처리해 주세요.")
     reply = text(data, "reply", 10, 3000) if target == "completed" else ""
     previous = petition.status
+    db.session.add(PetitionRevision(petition_id=petition.id, actor_id=g.user.id, status=petition.status,
+                                    reply=petition.reply, assignee_id=petition.assignee_id, version=petition.version))
     petition.status, petition.reply = target, reply
     db.session.add(PetitionHistory(petition_id=petition.id, actor_id=g.user.id, from_status=previous, to_status=target))
     try:
