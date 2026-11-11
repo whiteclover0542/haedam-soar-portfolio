@@ -20,7 +20,7 @@ def _id(name):
     return "hd" + "".join(ch for ch in name.title() if ch.isalnum())[:14]
 
 
-def build_credentials(env):
+def build_credentials(env, include_pfsense=True):
     def need(key):
         if not env.get(key):
             raise KeyError(f"{key} missing from .env")
@@ -30,10 +30,11 @@ def build_credentials(env):
                                               "data": {"name": header_name, "value": need(key)}}
     creds = [header(f"{c} caller", "X-Haedam-Key", "N8N_WEBHOOK_KEY") for c in CALLERS]
     creds += [header("ticket-store (C)", "X-Response-Key", "TICKET_STORE_KEY"),
-              header("haedam-portal-response", "X-Response-Key", "PORTAL_RESPONSE_KEY"),
-              {"id": _id("haedam-pf-response D"), "name": "haedam-pf-response D", "type": "sshPrivateKey",
-               "data": {"host": "10.250.0.1", "port": 22, "username": "admin",
-                        "privateKey": need("PF_SSH_PRIVATE_KEY"), "passphrase": ""}}]
+              header("haedam-portal-response", "X-Response-Key", "PORTAL_RESPONSE_KEY")]
+    if include_pfsense:
+        creds.append({"id": _id("haedam-pf-response D"), "name": "haedam-pf-response D", "type": "sshPrivateKey",
+                      "data": {"host": "10.250.0.1", "port": 22, "username": "admin",
+                               "privateKey": need("PF_SSH_PRIVATE_KEY"), "passphrase": ""}})
     if env.get("WAZUH_API_PASSWORD"):  # wazuh profile only; S7 restore needs it
         creds.append({"id": _id("wazuh-api (S7)"), "name": "wazuh-api (S7)", "type": "httpBasicAuth",
                       "data": {"user": "wazuh-wui", "password": env["WAZUH_API_PASSWORD"]}})

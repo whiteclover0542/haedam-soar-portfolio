@@ -4,14 +4,26 @@
 
 - **팀 원본:** [aleph-soar-capstone](https://github.com/NoBugs-Aleph/aleph-soar-capstone) · [haedam-portal-backend](https://github.com/NoBugs-Aleph/haedam-portal-backend) · [haedam-portal-frontend](https://github.com/NoBugs-Aleph/haedam-portal-frontend)
 - **팀원:** A · B · C · D (담당은 [CREDITS.md](CREDITS.md))
-- **본인(A):** 팀에서는 포털 서비스·대응 API와 S1·S4(계정 탈취) 담당. 이 저장소에서는 PC 한 대 구성 전체(compose, pfSense QEMU 컨테이너, Graylog·n8n 반입 스크립트, 티켓 실행기, 문서)를 작성하고 실측했습니다.
+- **본인(A):** 팀에서는 포털 서비스·대응 API와 S1·S4(계정 탈취) 담당. 이 저장소에서는 PC 한 대 구성 전체(compose, pfSense QEMU 컨테이너, Graylog·n8n 반입 스크립트, 티켓 실행기, 실습 제어판, 문서)를 작성하고 실측했습니다. 신규 시나리오 H1~H3을 추가하고 팀 티켓 S7·S12를 이 구성에서 실측까지 연결했습니다.
+
+## 결과 요약
+
+수정 후 9종 28회 실측(2026-11-09~12, PC 한 대). 원자료는 `docs/tickets/*/runs.jsonl`, 표와 해석은 [정량평가](docs/정량평가.md).
+
+| 자동 대응 | 원복 | 정상 사용자 영향 | 기준선 오탐 | 입력→차단 중앙값 | MTTD 중앙값 |
+| --- | --- | --- | --- | --- | --- |
+| **28/28** | **28/28** | **0회** | **0/10** | 34.77초 | 0.63초 |
+
+- 같은 케이스를 ① 프로젝트 코드 없는 raw 명령 ② 스크립트 ③ 제어판 세 경로로 공격해 9종 모두 같은 탐지→대응→원복을 확인했습니다([검증 체크리스트](docs/검증-체크리스트.md)).
+- 수정 전 실패 9회는 위 표에서 빼고 원인·수정과 함께 따로 적었습니다.
+- 미검증: S7 Discord 알림 수신(이 PC에 웹훅 미설정). 발표 자료는 [docs/취업준비](docs/취업준비/PPT-슬라이드-구성.md).
 
 ## 구성
 
 ```mermaid
 flowchart LR
   subgraph wan["wan 203.0.113.0/24"]
-    attacker["attacker .11 (.21 .22)"]
+    attacker["attacker .11 .13~.15 .21 .22 .42~"]
     normal["normal .100"]
   end
   subgraph lan["lan 10.250.0.0/24"]
@@ -31,6 +43,9 @@ flowchart LR
   n8n -->|"대응 API"| portal
   n8n -->|"SSH forced command"| pf
   n8n --> ticket
+  portal -. "Wazuh Agent FIM" .-> wazuh
+  wazuh -->|"FIM 경보 UDP 5514"| graylog
+  n8n -->|"Active Response"| wazuh
 ```
 
 | 구성 | lan 주소 | 호스트에서 접속 | compose 프로필 |
@@ -42,7 +57,7 @@ flowchart LR
 | n8n | `10.250.0.103` | http://127.0.0.1:5678 | `soc` |
 | Wazuh manager·indexer·dashboard | `10.250.0.4`·`.6`·`.7` | https://127.0.0.1:5601 | `wazuh` |
 | pfSense | WAN `203.0.113.1`, LAN `10.250.0.1` | 웹 https://127.0.0.1:8443, 설치 콘솔 http://127.0.0.1:8006 | `pfsense` |
-| attacker · normal | `203.0.113.11`(.21 .22) · `203.0.113.100` | — | `lab` |
+| attacker · normal | `203.0.113.11`·`.21`·`.22`(공격 때 `.13~.15`·`.42~` 추가) · `203.0.113.100` | — | `lab` |
 
 시민·공격자 쪽 요청은 반드시 pfSense를 거쳐 포털에 닿고, 포털의 응답도 pfSense로 돌아갑니다. 그래서 포털·Graylog가 보는 출발지가 실제 공격자 주소입니다.
 
@@ -97,10 +112,13 @@ http://127.0.0.1:8006/vnc.html 콘솔에서 설치하고, 웹 설정·대응 도
 ```powershell
 python infra/graylog/bootstrap.py --live      # 입력·스트림·파이프라인·알림·이벤트 정의. 다시 돌려도 "생성 0"
 python infra/n8n/load.py                      # 자격 증명·워크플로 반입, 웹훅·하위 워크플로 게시
+python infra/wazuh/enable_s7.py               # S7: Wazuh FIM 경보를 Graylog로 전달
+python infra/n8n/load.py --s7                 # S7: 홈페이지 변조 워크플로·Wazuh AR 하위 워크플로
 ```
 
 - `--live`를 빼면 n8n이 관찰 모드(티켓 기록·차단 없음)로 돕니다. 실측에는 `--live`가 필요합니다.
-- n8n 화면(http://127.0.0.1:5678)에 처음 들어가면 소유자 계정을 만듭니다.
+- n8n 화면(http://127.0.0.1:5678, `.env`의 `N8N_HOST_PORT`)에 처음 들어가면 소유자 계정을 만듭니다.
+- 메모리가 부족하면 [docs/local-runtime.md](docs/local-runtime.md)의 `tools/mvp.ps1 lite`(포털·DB·티켓 저장소만)로 화면만 먼저 볼 수 있습니다. 탐지·대응은 전체 기동에서만 됩니다.
 
 ### 6. 점검
 
@@ -128,23 +146,31 @@ OK   ticket-store  200 {"ok":true,...}
 **반복 측정(자동):**
 
 ```powershell
-python lab/run_ticket.py S10 --restore
+python lab/run_ticket.py S10 --restore        # S10·S8·S1·S4·S12·H1·H2
+python lab/h3/live.py                         # H3
+python lab/s7/live.py --file favicon.svg      # S7
 ```
 
 | 티켓 | 출발지 | 입력 | 기대 대응 | 문서 |
 | --- | --- | --- | --- | --- |
-| S10 경계 차단·스캔·로그인 반복 | `203.0.113.22` | 스캔 404 → 로그인 401 → ping(pfSense 차단) | 포털 차단 + pfSense 차단 | [docs/tickets/S10](docs/tickets/S10/README.md) |
-| S8 포털 스캔·로그인 반복 | `203.0.113.21` | 스캔 404 → 로그인 401 | 포털 차단(pfSense 호출 없음) | [docs/tickets/S8](docs/tickets/S8/README.md) |
-| S1 로그인 무차별 대입 | `203.0.113.11` | 같은 계정 로그인 실패 9회 | 포털에서 출발지 차단, 같은 계정의 정상 로그인은 유지 | [docs/tickets/S1](docs/tickets/S1/README.md) |
-| H1 민원 도배 | `203.0.113.11` | 같은 계정으로 민원 8건 연달아 등록 | 그 계정만 민원 작성 제한(429), 로그인·조회는 유지 | [docs/tickets/H1](docs/tickets/H1/README.md) |
+| S10 경계 차단·스캔·로그인 반복 | `203.0.113.22` | 스캔 404 → 로그인 401 → ping(pfSense 차단) | 포털 차단 + pfSense 차단 | [S10](docs/tickets/S10/README.md) |
+| S8 포털 스캔·로그인 반복 | `203.0.113.21` | 스캔 404 → 로그인 401 | 포털 차단(pfSense 호출 없음) | [S8](docs/tickets/S8/README.md) |
+| S1 로그인 무차별 대입 | `203.0.113.11` | 같은 계정 로그인 실패 9회 | 출발지 차단, 계정 주인 로그인은 유지 | [S1](docs/tickets/S1/README.md) |
+| S4 실패 뒤 성공(계정 탈취) | `203.0.113.13` | 실패 5회 뒤 맞는 비밀번호 | 계정 잠금·세션 회수, 비밀번호 재설정으로 원복 | [S4](docs/tickets/S4/README.md) |
+| S7 홈페이지 파일 변조 | 포털 `/app/dist` | 기준 파일 해시 변경 | Wazuh AR로 기준본 복구 | [S7](docs/tickets/S7/README.md) |
+| S12 요청 폭주 | `203.0.113.42~46` | 60초에 요청 60건 초과 | 그 출발지만 포털 차단 | [S12](docs/tickets/S12/README.md) |
+| H1 민원 도배 | `203.0.113.14` | 같은 계정으로 민원 8건 연달아 | 그 계정만 작성 제한(429), 로그인·조회 유지 | [H1](docs/tickets/H1/README.md) |
+| H2 타인 민원 엿보기 | `203.0.113.15` | 타인 민원 상세 403 ×3 | 출발지 차단 + 계정 잠금, 원복 뒤에도 타인 민원 403 | [H2](docs/tickets/H2/README.md) |
+| H3 처리 결과 조작 | 담당자 계정 | 담당자가 민원 3건 연달아 변경 | 담당자 잠금 + 변경 전 스냅샷으로 복원 | [H3](docs/tickets/H3/README.md) |
 
 실행기는 다음 순서로 진행하고 결과를 `docs/tickets/<ID>/runs.jsonl`에 한 줄씩 남깁니다.
 
-1. 사전 점검: 같은 출발지의 탐지 창(S8·S10 15분, S1 30분)이 지났는지, 남은 차단이 없는지
-2. `attacker` 컨테이너에서 입력
-3. 티켓 대기(최대 180초. Graylog가 1분마다 평가하므로 보통 30~70초)
-4. 효과: 공격자 403(S10은 연결 실패), `normal` 200
-5. `--restore`: n8n `haedam-50`으로 해제(pfSense → 포털), 공격자 200 확인
+1. 사전 점검: 같은 출발지의 탐지 창이 지났는지, 남은 차단이 없는지(S7은 웹 루트가 기준 해시와 같은지)
+2. 입력(`attacker` 컨테이너, H3는 포털 API, S7은 포털 컨테이너 파일)
+3. 티켓 대기(Graylog가 1분마다 평가하므로 보통 30~70초)
+4. 효과: 공격자 거부와 `normal` 정상(케이스별 기대값은 정량평가 지표 정의)
+5. 원복: `--restore`는 n8n `haedam-50` 해제 또는 비밀번호 재설정·관리자 해제, 공격자가 정상 결과로 돌아오는지 확인
+6. `--baseline`: 정상 사용 속도로 입력해 티켓이 생기지 않는지(오탐) 확인
 
 집계는 `python tools/summarize_runs.py`가 [docs/정량평가.md](docs/정량평가.md)에 씁니다.
 

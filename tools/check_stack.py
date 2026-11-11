@@ -50,10 +50,11 @@ def docker(*args, stdin=None, environ=None):
 
 def main():
     e = env()
+    n8n_host_port = e.get("N8N_HOST_PORT", "5678")
     checks = [
         ("portal", lambda: http("http://127.0.0.1:8080/api/v1/health")),
         ("graylog", lambda: http("http://127.0.0.1:9000/api/system/lbstatus")),
-        ("n8n", lambda: http("http://127.0.0.1:5678/healthz")),
+        ("n8n", lambda: http(f"http://127.0.0.1:{n8n_host_port}/healthz")),
         ("wazuh", lambda: docker("haedam-portal", "python", "-", "wazuh", stdin=LAN_PROBE,
                                  environ={"P": e["WAZUH_API_PASSWORD"]})),
         ("pfsense", lambda: docker("haedam-normal", "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",

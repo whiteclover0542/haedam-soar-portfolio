@@ -106,7 +106,8 @@ def release(e, case, case_id, group_key):
     """Release webhook (haedam-50) as the person calls it after checking the effect."""
     body = json.dumps({"seat": SEAT[case], "case_id": case_id, "group_key": group_key, "approver": "run_ticket",
                        "dry_run": False, "reason": "lab run restore"}).encode()
-    req = urllib.request.Request("http://127.0.0.1:5678/webhook/haedam-release", data=body, method="POST",
+    n8n_port = env().get("N8N_HOST_PORT", "5678")
+    req = urllib.request.Request(f"http://127.0.0.1:{n8n_port}/webhook/haedam-release", data=body, method="POST",
                                  headers={"Content-Type": "application/json", "X-Haedam-Key": e["N8N_WEBHOOK_KEY"]})
     with urllib.request.urlopen(req, timeout=120) as r:
         rel = json.loads(r.read())
@@ -153,7 +154,7 @@ def unauth_release_code(case):
               "'application/json'},body:JSON.stringify({username:'zz',restricted:false})}).then(r=>console.log(r.status))")
         return sh("docker", "exec", "haedam-n8n", "node", "-e", js)
     body = json.dumps({"seat": SEAT[case], "case_id": case, "group_key": "zz", "approver": "noauth", "dry_run": True}).encode()
-    req = urllib.request.Request("http://127.0.0.1:5678/webhook/haedam-release", data=body, method="POST",
+    req = urllib.request.Request(f"http://127.0.0.1:{env().get('N8N_HOST_PORT', '5678')}/webhook/haedam-release", data=body, method="POST",
                                  headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:

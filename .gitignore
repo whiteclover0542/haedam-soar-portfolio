@@ -8,8 +8,10 @@ node_modules/
 dist/
 instance/
 .pytest_cache/
+.history/
 .superpowers/
 infra/pfsense/iso/
 .local/
+pfsense-vnc.bmp
 infra/wazuh/config/wazuh_indexer_ssl_certs/
 infra/wazuh/config/internal_users.yml
