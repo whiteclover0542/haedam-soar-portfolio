@@ -68,3 +68,10 @@ def test_bootstrap_lists_h2_with_the_foreign_detail_definition():
 
     assert DEFINITIONS["lab/h2/graylog/h2-petition-access-denied.json"] == "haedam-h2"
     assert NOTIFICATIONS["haedam-h2"] == "infra/graylog/notifications/h2-n8n-haedam-h2.json"
+
+
+def test_bootstrap_lists_h3_staff_update_definition():
+    from infra.graylog.bootstrap import DEFINITIONS, NOTIFICATIONS
+
+    assert DEFINITIONS["lab/h3/graylog/h3-petition-update.json"] == "haedam-h3"
+    assert NOTIFICATIONS["haedam-h3"] == "infra/graylog/notifications/h3-n8n-haedam-h3.json"

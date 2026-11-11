@@ -88,6 +88,21 @@ class PetitionHistory(db.Model):
                 "actor": self.actor.display_name, "created_at": iso(self.created_at)}
 
 
+class PetitionRevision(db.Model):
+    """Immutable pre-change snapshot used by the H3 response flow."""
+    __tablename__ = "petition_revisions"
+    id = db.Column(db.Integer, primary_key=True)
+    petition_id = db.Column(db.Integer, db.ForeignKey("petitions.id"), nullable=False, index=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    status = db.Column(db.String(20), nullable=False)
+    reply = db.Column(db.Text, nullable=False, default="")
+    assignee_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    version = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=now)
+    petition = db.relationship(Petition, backref=db.backref("revisions", order_by="PetitionRevision.id", lazy="selectin"))
+    actor = db.relationship(User, foreign_keys=[actor_id])
+
+
 class ResponseReceipt(db.Model):
     __tablename__ = "response_receipts"
     request_key = db.Column(db.String(64), primary_key=True)

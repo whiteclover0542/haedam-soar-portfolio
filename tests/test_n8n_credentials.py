@@ -69,6 +69,15 @@ def test_h2_workflow_derived():
     assert "/reset" not in release and "held_still_locked" in release
 
 
+def test_h3_workflow_locks_before_requesting_snapshot_restore():
+    main = load(Path("infra/n8n/workflows/haedam-37-h3-main.json"))
+    text = json.dumps(main, ensure_ascii=False)
+
+    assert main["id"] == "haedamH3Main01" and main["active"] is False
+    assert "haedam-h3" in text and "case_id must be H3" in text
+    assert text.index("haedamAccountLock01") < text.index("/response/petitions/")
+
+
 def test_discord_is_optional_and_wired_when_set():
     assert "discordWebhookApi" not in {c["type"] for c in build_credentials(ENV)}
     creds = build_credentials({**ENV, "DISCORD_WEBHOOK_URL": "https://example.invalid/webhook"})
