@@ -31,7 +31,7 @@ def run_h2(portal_login, *, attacker, attacker_password, victim, victim_password
     if registered["statuses"] != [201]:
         raise RuntimeError("H2 victim registration failed")
     victim_posts = portal_login("haedam-normal", normal_source, "post", victim, "3", pw=victim_password)
-    petition_ids = victim_posts.get("petition_ids", [])
+    petition_ids = victim_posts.get("ids", [])
     if victim_posts["statuses"] != [201, 201, 201] or len(set(petition_ids)) != 3:
         raise RuntimeError("H2 victim petitions were not created")
     registered = portal_login("haedam-attacker", attacker_source, "register", attacker, pw=attacker_password)
@@ -41,7 +41,7 @@ def run_h2(portal_login, *, attacker, attacker_password, victim, victim_password
     if denied.get("login") != 200 or denied["statuses"] != [403, 403, 403]:
         raise RuntimeError("H2 did not make three foreign-petition denials")
     own_post = portal_login("haedam-attacker", attacker_source, "post", attacker, "1", pw=attacker_password)
-    own_ids = own_post.get("petition_ids", [])
+    own_ids = own_post.get("ids", [])
     if own_post["statuses"] != [201] or len(own_ids) != 1:
         raise RuntimeError("H2 attacker self-petition was not created")
     own = portal_login("haedam-attacker", attacker_source, "detail", attacker, str(own_ids[0]), pw=attacker_password)

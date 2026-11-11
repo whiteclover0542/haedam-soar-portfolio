@@ -30,9 +30,10 @@ def test_run_h2_creates_three_foreign_denials_and_a_self_check():
         if mode == "register":
             return {"statuses": [201]}
         if mode == "post" and username == "victim":
-            return {"statuses": [201, 201, 201], "petition_ids": [41, 42, 43]}
+            # portal_login.py returns created petition identifiers under ``ids``.
+            return {"statuses": [201, 201, 201], "ids": [41, 42, 43]}
         if mode == "post":
-            return {"statuses": [201], "petition_ids": [44]}
+            return {"statuses": [201], "ids": [44]}
         if mode == "detail":
             return {"login": 200, "statuses": [403, 403, 403] if len(values) == 3 else [200]}
         raise AssertionError(mode)
