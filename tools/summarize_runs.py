@@ -10,8 +10,8 @@ from pathlib import Path
 from statistics import median
 
 ROOT = Path(__file__).resolve().parents[1]
-CASES = ["S10", "S8", "S1", "S4", "H1", "H2", "H3"]
-EXPECTED_VIA = {"S10": {"portal", "pfsense"}, "S8": {"portal"}, "S1": {"portal"}, "S4": {"portal"}, "H1": {"portal"}, "H2": {"portal"}, "H3": {"portal"}}
+CASES = ["S10", "S8", "S1", "S4", "S12", "H1", "H2", "H3"]
+EXPECTED_VIA = {"S10": {"portal", "pfsense"}, "S8": {"portal"}, "S1": {"portal"}, "S4": {"portal"}, "S12": {"portal"}, "H1": {"portal"}, "H2": {"portal"}, "H3": {"portal"}}
 RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting", "lock")
 # What the attacker / the normal user should get while the response is in force.
 REFUSED = {"H1": ("429",), "H3": ("401",), "S4": ("401",)}  # H3: attacker = the locked staff login, normal = the owner's restored petitions

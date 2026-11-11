@@ -23,7 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = {"S1": "203.0.113.11", "S4": "203.0.113.11", "S12": "203.0.113.42", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11", "H2": "203.0.113.11"}
 # S4: fresh account per run, but each run makes ~8 logins from the same source and the portal allows 20 per source
 # in 5 minutes (LOGIN_RATE_LIMIT), so runs closer than 5 minutes get 429 instead of the checked status.
-WINDOW_MIN = {"S1": 30, "S4": 5, "S8": 15, "S10": 15, "S12": 2, "H1": 10, "H2": 5}
+WINDOW_MIN = {"S1": 30, "S4": 5, "S8": 15, "S10": 15, "S12": 1, "H1": 10, "H2": 5}
+S12_POOL = ["203.0.113.42", "203.0.113.43", "203.0.113.44", "203.0.113.45", "203.0.113.46"]  # a fresh source per run so each gets its own ticket
 SEAT = {"S1": "A", "S4": "A", "S8": "B", "S10": "B", "S12": "D", "H1": "A", "H2": "C"}
 H1_POSTS = 8  # 탐지 기준 N=5보다 넉넉히(초안). 기준선은 --baseline
 S4_FAILS, S4_HOLD = 5, 180  # 탐지: 10분 안 실패·성공 합계 6건 이상(card(rule)>1, count()>5)
@@ -187,6 +188,9 @@ def main():
     left = window_blocked(last_run(case), now, WINDOW_MIN[case])
     if left and not a.baseline:
         raise SystemExit(f"{case}: same-source window still open, wait {left}s")
+    if case == "S12":  # a source with no ticket yet, so this run creates (or, for baseline, avoids) its own ticket cleanly
+        used = {t["group_key"] for t in get(f"{TICKETS}?limit=200")["items"]}
+        src = next((ip for ip in S12_POOL if ip not in used), SRC["S12"])
     problems = precheck(portal_blocked(e), pf_table() if case == "S10" else [], src)
     if problems:
         raise SystemExit("precheck: " + ", ".join(problems))
@@ -205,13 +209,15 @@ def main():
         run["input"] = portal_login("haedam-attacker", src, "view", user, "--ids=" + ",".join(map(str, ids[:H2_VIEWS[a.baseline]])), pw=pw)
         group_key = user
     elif case == "S12":
-        # Very light request burst from .41 (4 req/s for 60 s) so Graylog counts > N while the load stays tiny.
-        # The flood keeps running until the source is blocked (403) or its duration ends.
+        # A light request burst so Graylog counts > N while the load stays tiny. A real run uses ~4 req/s; a baseline
+        # uses ~0.5 req/s so the 60 s window stays under N (no ticket). The flood stops when the source is blocked.
+        run["src"], run["baseline"] = src, a.baseline or None
         sh("docker", "exec", "haedam-attacker", "ip", "addr", "add", f"{src}/24", "dev", "eth0", check=False)
         sh("docker", "cp", str(ROOT / "tools/s12_flood.py"), "haedam-attacker:/lab/s12_flood.py")
+        rate = "0.5" if a.baseline else "4"
         run["input_at"] = datetime.now(timezone.utc).isoformat()
         out = sh("docker", "exec", "haedam-attacker", "python", "/lab/s12_flood.py", "--url",
-                 "http://203.0.113.1/api/v1/health", "--source", src, "--rates", "4", "--stage-seconds", "60",
+                 "http://203.0.113.1/api/v1/health", "--source", src, "--rates", rate, "--stage-seconds", "60",
                  "--duration", "70", "--concurrency", "3", "--max-rate", "10", "--label", f"s12-{run['run_id']}",
                  "--out", f"/tmp/s12-{run['run_id']}.csv", check=False)
         run["input"] = (out.splitlines() or ["(no output)"])[-1][:200]
