@@ -21,7 +21,7 @@ def upgrade():
         sa.Column("petition_id", sa.Integer(), sa.ForeignKey("petitions.id"), nullable=False),
         sa.Column("actor_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("reply", sa.Text(), nullable=False, server_default=""),
+        sa.Column("reply", sa.Text(), nullable=False),
         sa.Column("assignee_id", sa.Integer(), sa.ForeignKey("users.id")),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
