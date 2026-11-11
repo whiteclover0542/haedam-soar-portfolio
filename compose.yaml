@@ -27,6 +27,7 @@ volumes:
   filebeat-var:
   wazuh-indexer-data:
   wazuh-certs:
+  portal-wazuh-etc:
   n8n-data:
 
 services:
@@ -63,8 +64,11 @@ services:
     networks:
       lan: {ipv4_address: 10.250.0.2}
     ports: ["127.0.0.1:8080:5000"]
+    hostname: haedam-portal
+    init: true   # reaps the Wazuh agent daemons when the agent restarts itself (PID 1 is otherwise waitress)
+    volumes: [portal-wazuh-etc:/var/ossec/etc]   # S7 agent key: same agent id (001) after the container is recreated
     depends_on: [portal-db]
-    mem_limit: 384m
+    mem_limit: 512m
     restart: unless-stopped
 
   ticket-store:

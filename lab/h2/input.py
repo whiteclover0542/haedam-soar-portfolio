@@ -25,7 +25,7 @@ def build_plan(username, petition_ids):
 
 
 def run_h2(portal_login, *, attacker, attacker_password, victim, victim_password,
-           attacker_source="203.0.113.11", normal_source="203.0.113.100"):
+           attacker_source="203.0.113.15", normal_source="203.0.113.100"):
     """Make the H2 input with fresh synthetic users and petitions only."""
     registered = portal_login("haedam-normal", normal_source, "register", victim, pw=victim_password)
     if registered["statuses"] != [201]:

@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lab.run_ticket import (H1_POSTS, NORMAL, ROOT, S12_POOL, SEAT, SRC, TICKETS, env, get, http_code, portal_login,  # noqa: E402
+from lab.run_ticket import (H1_POSTS, NORMAL, ROOT, S12_POOL, SEAT, SRC, TICKETS, ensure_src, env, get, http_code, portal_login,  # noqa: E402
                             portal_reset, sh, tickets_for)
 from lab.h2.input import run_h2  # noqa: E402
 from lab.h3 import live as h3  # noqa: E402
@@ -39,6 +39,7 @@ def now():
 def attack(case):
     # 입력을 보내기 전 시각: 입력 중에 들어온 로그도 ②에서 세야 한다(끝난 뒤 시각이면 ②가 0건으로 남음)
     src, log, started = SRC[case], [], datetime.now(timezone.utc)
+    ensure_src(src)   # 케이스마다 출발지가 따로라 공격 컨테이너에 그 주소를 붙인다(H3는 계정 기준이라 건너뜀)
     if case in ("S10", "S8"):
         if case == "S10":
             cmd = f"ping -I {src} -c 1 -W 1 203.0.113.1"
@@ -79,7 +80,7 @@ def attack(case):
         used = {t["group_key"] for t in get(f"{TICKETS}?limit=200")["items"]}
         src = next((ip for ip in S12_POOL if ip not in used), SRC["S12"])
         USERS[case] = {"src": src, "user": src}
-        sh("docker", "exec", "haedam-attacker", "ip", "addr", "add", f"{src}/24", "dev", "eth0", check=False)
+        ensure_src(src)
         sh("docker", "cp", str(ROOT / "tools/s12_flood.py"), "haedam-attacker:/lab/s12_flood.py")
         stamp = datetime.now().strftime("%H%M%S")
         out = sh("docker", "exec", "haedam-attacker", "python", "/lab/s12_flood.py", "--url", "http://203.0.113.1/api/v1/health",
@@ -480,7 +481,7 @@ function draw(){const d=last[cur]||{},steps=d.steps||[];
  const list=steps.length?steps:["① 공격 보냄","② Graylog에 로그 도착","③ 탐지 (Graylog 경보)","④ 자동 대응 (n8n)","⑤ 효과","⑥ 해제 (사람이 확인 후)"].map(n=>({name:n,state:"idle",text:"[공격]을 누르면 시작합니다."}));
  const icon={done:"✓",wait:"…",bad:"!",idle:""};
  const next=!steps.length?"[공격]을 눌러 시작하세요.":steps.find(s=>s.state==="bad")?"빨간 단계를 확인하세요. 오른쪽 링크의 화면에서 원인을 볼 수 있습니다.":
-   steps[5].state==="done"?"한 바퀴 끝. 같은 출발지는 15분(S1 30분, H1 10분) 뒤에 다시 할 수 있습니다(H3는 회차마다 새 계정이라 바로 가능). S1과 H1은 출발지(.11)가 같으니 이어서 하지 마세요.":
+   steps[5].state==="done"?"한 바퀴 끝. 다른 케이스는 출발지가 각각 따로라 바로 해도 됩니다. 같은 케이스를 다시 할 때만 S10·S8은 15분, S1·S4는 5분(출발지당 로그인 한도) 기다립니다.":
    steps[4].state==="done"?"효과까지 확인됐습니다. 티켓 대시보드에서 기록을 본 뒤 [해제]를 누르세요.":"자동으로 진행 중입니다. 5초마다 갱신됩니다.";
  document.getElementById("panel").innerHTML=`<div class="top"><div><h2>${INFO[cur][0]}</h2><p>${INFO[cur][1]}</p><p>공격자 IP <b>${esc(d.src)}</b>${d.elapsed!=null?` · 공격 뒤 <b>${d.elapsed}초</b>`:""}${d.ticket?` · 티켓 <b>${esc(d.ticket.ticket_id)}</b> (${esc(d.ticket.status)})`:""}</p></div>
  <div class="btns"><button class="attack" onclick="run('attack')">공격</button><button onclick="run('effect')">효과 다시 확인</button><button onclick="run('release')">해제</button></div></div>

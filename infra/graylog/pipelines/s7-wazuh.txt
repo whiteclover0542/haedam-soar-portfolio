@@ -1,0 +1,35 @@
+// S7 홈페이지 변조: Wazuh FIM 경보(syslog UDP, JSON)를 풀어 S7 신호를 단다. 스트림 wazuh에 연결.
+// 메시지 모양: <132>… ossec: {JSON}  (manager syslog_output, format json, group syscheck — infra/wazuh/enable_s7.py)
+// 파싱 규칙은 팀 wazuh-parse(C 인수인계 10/22)에서 가져왔다. 팀 설계의 "FIM + 같은 경로 웹 접근" 상관과 기준 해시
+// 조회 테이블은 쓰지 않는다: 복원은 파일을 기준본으로 되돌릴 뿐이라 FIM 신호 하나로 대응하고, 기준 해시는
+// bootstrap.py가 포털의 /opt/haedam-s7/baseline.sha256을 읽어 아래 __S7_NOT_BASELINE__ 자리에 넣는다.
+// (복원이 만든 550 경보는 sha256_after가 기준 해시라 신호가 되지 않는다 → 복원↔경보 반복 없음)
+// ponytail: 해시만 비교한다. 허용된 다른 파일 내용으로 덮는 회피는 못 거른다 → 필요하면 (해시, file_key) 짝으로.
+//
+// pipeline "s7-wazuh"
+// stage 0 match either   rule "s7: parse wazuh alert"
+// stage 1 match either   rule "s7: fim change on web root"
+// end
+
+rule "s7: parse wazuh alert"
+when
+  contains(to_string($message.message), "ossec: {")
+then
+  let m = regex("ossec: (.*)", to_string($message.message));
+  let flat = to_map(flatten_json(to_string(m["0"]), "json"));
+  set_fields(fields: flat, prefix: "wazuh_");
+  set_field("message", concat(concat(concat("[Wazuh ", to_string(flat["rule_id"])), "] "), to_string(flat["rule_description"])));
+end
+
+rule "s7: fim change on web root"
+when
+  to_string($message.wazuh_agent_name) == "haedam-portal"
+  && starts_with(to_string($message.wazuh_syscheck_path), "/app/dist/")
+  && (to_string($message.wazuh_rule_id) == "550" || to_string($message.wazuh_rule_id) == "554")
+  && __S7_NOT_BASELINE__
+then
+  set_field("file_key", replace(to_string($message.wazuh_syscheck_path), "/app/dist/", ""));
+  set_field("asset_id", "haedam-portal");
+  set_field("signal_kind", "fim-change");
+  set_field("s7_change_type", to_string($message.wazuh_syscheck_event));
+end

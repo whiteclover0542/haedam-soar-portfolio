@@ -9,6 +9,7 @@ import copy
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -22,6 +23,7 @@ INPUTS = [
     ("portal GELF TCP", "org.graylog2.inputs.gelf.tcp.GELFTCPInput", 12201),
     ("pfSense Syslog UDP", "org.graylog2.inputs.syslog.udp.SyslogUDPInput", 1514),
     ("Wazuh Raw TCP", "org.graylog2.inputs.raw.tcp.RawTCPInput", 5514),
+    ("Wazuh Raw UDP", "org.graylog2.inputs.raw.udp.RawUDPInput", 5514),  # S7: Wazuh syslog_output is UDP only
 ]
 NOTIFICATIONS = {"haedam-s1": "infra/graylog/notifications/s1-n8n-haedam-s1.json",
                  "haedam-s4": "infra/graylog/notifications/s4-n8n-haedam-s4.json",
@@ -29,7 +31,8 @@ NOTIFICATIONS = {"haedam-s1": "infra/graylog/notifications/s1-n8n-haedam-s1.json
                  "haedam-h1": "infra/graylog/notifications/h1-n8n-haedam-h1.json",
                  "haedam-h2": "infra/graylog/notifications/h2-n8n-haedam-h2.json",
                  "haedam-h3": "infra/graylog/notifications/h3-n8n-haedam-h3.json",
-                 "haedam-s12": "infra/graylog/notifications/s12-n8n-haedam-s12.json"}
+                 "haedam-s12": "infra/graylog/notifications/s12-n8n-haedam-s12.json",
+                 "haedam-s7": "infra/graylog/notifications/s7-n8n-haedam-s7.json"}
 DEFINITIONS = {"lab/s1s4/graylog/s1-login-bruteforce.json": "haedam-s1",
                "lab/s1s4/graylog/s4-fail-then-success.json": "haedam-s4",
                "lab/s8s10/graylog/s8-scan-then-login.json": "haedam-s8-s10",
@@ -37,7 +40,15 @@ DEFINITIONS = {"lab/s1s4/graylog/s1-login-bruteforce.json": "haedam-s1",
                "lab/h1/graylog/h1-petition-flood.json": "haedam-h1",
                "lab/h2/graylog/h2-petition-access-denied.json": "haedam-h2",
                "lab/h3/graylog/h3-petition-update.json": "haedam-h3",
-               "lab/s12/graylog/s12-request-flood.json": "haedam-s12"}
+               "lab/s12/graylog/s12-request-flood.json": "haedam-s12",
+               "lab/s7/graylog/s7-fim-change.json": "haedam-s7"}
+
+
+def s7_baseline_hashes():
+    """sha256 of every file the portal image shipped (written at build time by s7_restore.py baseline)."""
+    r = subprocess.run(["docker", "exec", "haedam-portal", "cat", "/opt/haedam-s7/baseline.sha256"],
+                       capture_output=True, text=True)
+    return sorted({line.split()[0] for line in r.stdout.splitlines() if re.match(r"^[0-9a-f]{64}\s", line)})
 
 
 def replace_stream_ids(defn, ids):
@@ -128,7 +139,9 @@ def main():
     streams = {s["title"]: s["id"] for s in gl.call("GET", "/api/streams")["streams"]}
     for title, rule in [("haedam-portal", {"field": "source", "type": 1, "value": "haedam-portal", "inverted": False}),
                         ("pfsense", {"field": "gl2_source_input", "type": 8,
-                                     "value": inputs["pfSense Syslog UDP"], "inverted": False})]:
+                                     "value": inputs["pfSense Syslog UDP"], "inverted": False}),
+                        ("wazuh", {"field": "gl2_source_input", "type": 8,
+                                   "value": inputs["Wazuh Raw UDP"], "inverted": False})]:
         if title not in streams:
             streams[title] = gl.call("POST", "/api/streams", {
                 "title": title, "index_set_id": index_set, "rules": [rule], "matching_type": "AND",
@@ -136,18 +149,31 @@ def main():
             gl.call("POST", f"/api/streams/{streams[title]}/resume")
             created += 1
 
-    pipeline_src, rule_srcs = pipeline_parts((ROOT / "infra/graylog/pipelines/pfsense-parse.txt").read_text("utf-8"))
-    have_rules = {r["title"] for r in gl.call("GET", "/api/system/pipelines/rule")}
-    for src in rule_srcs:
-        if re.match(r'rule "(.*?)"', src).group(1) not in have_rules:
-            gl.call("POST", "/api/system/pipelines/rule", {"source": src, "description": ""})
-            created += 1
+    rules = {r["title"]: r for r in gl.call("GET", "/api/system/pipelines/rule")}
     pipelines = {p["title"]: p["id"] for p in gl.call("GET", "/api/system/pipelines/pipeline")}
-    if "pfsense-parse" not in pipelines:
-        pid = gl.call("POST", "/api/system/pipelines/pipeline", {"source": pipeline_src, "description": ""})["id"]
-        gl.call("POST", "/api/system/pipelines/connections/to_stream",
-                {"stream_id": streams["pfsense"], "pipeline_ids": [pid]})
-        created += 1
+    for name, stream in [("pfsense-parse", "pfsense"), ("s7-wazuh", "wazuh")]:
+        text = (ROOT / f"infra/graylog/pipelines/{name}.txt").read_text("utf-8")
+        if "__S7_NOT_BASELINE__" in text:
+            hashes = s7_baseline_hashes()
+            if not hashes:
+                print("S7: portal baseline not readable (is haedam-portal running?) - S7 pipeline skipped")
+                continue
+            text = text.replace("__S7_NOT_BASELINE__", " && ".join(
+                f'to_string($message.wazuh_syscheck_sha256_after) != "{h}"' for h in hashes))
+        pipeline_src, rule_srcs = pipeline_parts(text)
+        for src in rule_srcs:
+            title = re.match(r'rule "(.*?)"', src).group(1)
+            if title not in rules:
+                gl.call("POST", "/api/system/pipelines/rule", {"source": src, "description": ""})
+                created += 1
+            elif rules[title]["source"].strip() != src.strip():  # e.g. S7 baseline hashes after a portal rebuild
+                gl.call("PUT", f"/api/system/pipelines/rule/{rules[title]['id']}",
+                        {"title": title, "source": src, "description": ""})
+        if name not in pipelines:
+            pid = gl.call("POST", "/api/system/pipelines/pipeline", {"source": pipeline_src, "description": ""})["id"]
+            gl.call("POST", "/api/system/pipelines/connections/to_stream",
+                    {"stream_id": streams[stream], "pipeline_ids": [pid]})
+            created += 1
 
     allow = gl.call("GET", "/api/system/urlwhitelist")
     urls = {e["value"] for e in allow["entries"]}

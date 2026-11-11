@@ -25,4 +25,7 @@ flask seed-demo --confirm 2>&1 | grep -v '비밀번호' || true
 printf '%s\n%s\n' "$PORTAL_ADMIN_PASSWORD" "$PORTAL_ADMIN_PASSWORD" |
   flask create-admin --username "$PORTAL_ADMIN_USERNAME" --name "관리자" 2>&1 | grep -v -i password || true
 
+# S7: file integrity agent. The portal still serves if the manager (wazuh profile) is not running.
+/var/ossec/bin/wazuh-control start >/dev/null 2>&1 || echo "wazuh agent not started"
+
 exec waitress-serve --port 5000 --call haedam_portal:create_app

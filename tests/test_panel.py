@@ -36,7 +36,7 @@ def test_h2_is_connected_like_h1_and_uses_the_same_reversible_response_path(monk
     h2 = panel.state()["H2"]
 
     assert "pending" not in h2
-    assert panel.SRC["H2"] == panel.SRC["H1"]
+    assert panel.SRC["H2"] != panel.SRC["H1"]   # own source, so H1 runs never eat H2's login budget
     assert panel.EXPECT["H2"][0] == "403"
     assert panel.NORMAL_OK["H2"] == "200"
 

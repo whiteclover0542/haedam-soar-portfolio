@@ -31,6 +31,13 @@ def test_mttd_seconds():
 
 
 def test_h2_is_available_to_the_same_command_runner_as_other_cases():
-    assert SRC["H2"] == "203.0.113.11"
+    assert SRC["H2"] == "203.0.113.15"
     assert SEAT["H2"] == "C"
     assert WINDOW_MIN["H2"] == 5
+
+
+def test_every_case_has_its_own_blockable_source():
+    # Shared sources starved each other on the portal's 20-logins-per-source limit (429 is not counted).
+    assert len(set(SRC.values())) == len(SRC)
+    protected = {"203.0.113.10", "203.0.113.12"} | {f"203.0.113.{n}" for n in range(100, 110)}   # n8n refuses to block these
+    assert not protected & set(SRC.values())

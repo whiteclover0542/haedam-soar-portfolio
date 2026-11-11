@@ -20,7 +20,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = {"S1": "203.0.113.11", "S4": "203.0.113.11", "S12": "203.0.113.42", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11", "H2": "203.0.113.11"}
+# One source per case: the portal allows 20 logins per source in 5 minutes, so cases sharing .11 starved each other
+# (429 is not counted by detection). Never .10 (Kali), .12 (normal control) or .100-.109 — n8n refuses to block those.
+SRC = {"S1": "203.0.113.11", "S4": "203.0.113.13", "S12": "203.0.113.42", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.14", "H2": "203.0.113.15"}
 # S4: fresh account per run, but each run makes ~8 logins from the same source and the portal allows 20 per source
 # in 5 minutes (LOGIN_RATE_LIMIT), so runs closer than 5 minutes get 429 instead of the checked status.
 WINDOW_MIN = {"S1": 30, "S4": 5, "S8": 15, "S10": 15, "S12": 1, "H1": 10, "H2": 5}
@@ -177,6 +179,12 @@ def find_ticket(case, group_key, before, timeout=180):
     return None
 
 
+def ensure_src(src):
+    """Give the attacker container this source address (compose only adds .11/.21/.22; it is lost on restart)."""
+    if src.startswith("203.0.113."):
+        sh("docker", "exec", "haedam-attacker", "ip", "addr", "add", f"{src}/24", "dev", "eth0", check=False)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("case", choices=SRC)
@@ -191,14 +199,15 @@ def main():
     if case == "S12":  # a source with no ticket yet, so this run creates (or, for baseline, avoids) its own ticket cleanly
         used = {t["group_key"] for t in get(f"{TICKETS}?limit=200")["items"]}
         src = next((ip for ip in S12_POOL if ip not in used), SRC["S12"])
+    ensure_src(src)
     problems = precheck(portal_blocked(e), pf_table() if case == "S10" else [], src)
     if problems:
         raise SystemExit("precheck: " + ", ".join(problems))
 
     run = {"case": case, "src": src, "run_id": now.strftime("%m%d%H%M%S")}
     if case == "H2":
-        # Victim files petitions from the normal source; a citizen at .11 opens them (403 each). The baseline uses the
-        # same unprotected source (.11 is not a protected normal source), so a false positive would show up as a ticket.
+        # Victim files petitions from the normal source; a citizen at the H2 source opens them (403 each). The baseline uses
+        # the same unprotected source (not a protected normal source), so a false positive would show up as a ticket.
         victim, vpw = f"zz_v_h2_{run['run_id']}", secrets.token_urlsafe(12)
         portal_login("haedam-normal", NORMAL, "register", victim, pw=vpw)
         ids = portal_login("haedam-normal", NORMAL, "post", victim, "3", pw=vpw)["ids"]
@@ -212,7 +221,6 @@ def main():
         # A light request burst so Graylog counts > N while the load stays tiny. A real run uses ~4 req/s; a baseline
         # uses ~0.5 req/s so the 60 s window stays under N (no ticket). The flood stops when the source is blocked.
         run["src"], run["baseline"] = src, a.baseline or None
-        sh("docker", "exec", "haedam-attacker", "ip", "addr", "add", f"{src}/24", "dev", "eth0", check=False)
         sh("docker", "cp", str(ROOT / "tools/s12_flood.py"), "haedam-attacker:/lab/s12_flood.py")
         rate = "0.5" if a.baseline else "4"
         run["input_at"] = datetime.now(timezone.utc).isoformat()

@@ -47,4 +47,4 @@ def test_run_h2_creates_three_foreign_denials_and_a_self_check():
     assert run["statuses"] == [403, 403, 403]
     assert run["own_status"] == 200
     assert run["victim_petition_ids"] == [41, 42, 43]
-    assert ("haedam-attacker", "203.0.113.11", "view", "attacker", ("--ids=41,42,43",)) in calls
+    assert ("haedam-attacker", "203.0.113.15", "view", "attacker", ("--ids=41,42,43",)) in calls
