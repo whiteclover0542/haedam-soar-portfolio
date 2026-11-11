@@ -75,3 +75,14 @@ def test_bootstrap_lists_h3_staff_update_definition():
 
     assert DEFINITIONS["lab/h3/graylog/h3-petition-update.json"] == "haedam-h3"
     assert NOTIFICATIONS["haedam-h3"] == "infra/graylog/notifications/h3-n8n-haedam-h3.json"
+
+
+def test_h3_definition_copies_restore_identifiers_from_the_source_message():
+    import json
+    from pathlib import Path
+
+    definition = json.loads(Path("lab/h3/graylog/h3-petition-update.json").read_text(encoding="utf-8"))
+
+    fields = definition["field_spec"]
+    assert fields["petition_id"]["providers"][0]["template"] == "${source.petition_id}"
+    assert fields["revision_id"]["providers"][0]["template"] == "${source.revision_id}"

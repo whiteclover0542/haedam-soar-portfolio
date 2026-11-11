@@ -13,8 +13,8 @@
   },
   "field_spec": {
     "username": {"data_type": "string", "providers": [{"type": "template-v1", "template": "${source.username}", "require_values": true}]},
-    "petition_id": {"data_type": "string", "providers": [{"type": "template-v1", "template": "${petition_id}", "require_values": true}]},
-    "revision_id": {"data_type": "string", "providers": [{"type": "template-v1", "template": "${revision_id}", "require_values": true}]},
+    "petition_id": {"data_type": "string", "providers": [{"type": "template-v1", "template": "${source.petition_id}", "require_values": true}]},
+    "revision_id": {"data_type": "string", "providers": [{"type": "template-v1", "template": "${source.revision_id}", "require_values": true}]},
     "case_id": {"data_type": "string", "providers": [{"type": "template-v1", "template": "H3", "require_values": true}]}
   },
   "key_spec": ["username"],
