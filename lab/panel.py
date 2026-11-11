@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lab.run_ticket import (H1_POSTS, NORMAL, ROOT, SEAT, SRC, TICKETS, env, get, http_code, portal_login,  # noqa: E402
+from lab.run_ticket import (H1_POSTS, NORMAL, ROOT, S12_POOL, SEAT, SRC, TICKETS, env, get, http_code, portal_login,  # noqa: E402
                             portal_reset, sh, tickets_for)
 from lab.h2.input import run_h2  # noqa: E402
 from lab.h3 import live as h3  # noqa: E402
@@ -24,7 +24,7 @@ from lab.h3 import live as h3  # noqa: E402
 PORT = 8099
 TOKEN = secrets.token_urlsafe(16)
 CASES = ["H1", "H2", "H3", "S1", "S4", "S7", "S8", "S10", "S12"]
-PENDING_CASES = {"S7", "S12"}  # Graylog 정의·n8n 반입 전(docs/PROGRESS.md)
+PENDING_CASES = {"S7"}  # Graylog 정의·n8n 반입 전(docs/PROGRESS.md)
 SRC = {**SRC, "H3": "담당자 계정(포털 내부)"}
 SEAT = {**SEAT, "H3": "C"}   # haedam-50 해제 웹훅에 넘길 자리
 USERS = {}    # S1·H1·H2·H3 이번 실행에서 만든 계정 {"user", "pw"} (이름·비밀번호는 메모리에만)
@@ -74,6 +74,18 @@ def attack(case):
         USERS[case] = {"user": user, "pw": pw, "user_id": out.get("user_id")}
         log.append({"step": "비밀번호를 아는 공격자: 틀린 비밀번호 5번 → 맞는 비밀번호로 로그인 성공",
                     "cmd": f"portal_login.py --source {src} takeover {user} 5", "result": out["statuses"]})
+    elif case == "S12":
+        used = {t["group_key"] for t in get(f"{TICKETS}?limit=200")["items"]}
+        src = next((ip for ip in S12_POOL if ip not in used), SRC["S12"])
+        USERS[case] = {"src": src, "user": src}
+        sh("docker", "exec", "haedam-attacker", "ip", "addr", "add", f"{src}/24", "dev", "eth0", check=False)
+        sh("docker", "cp", str(ROOT / "tools/s12_flood.py"), "haedam-attacker:/lab/s12_flood.py")
+        stamp = datetime.now().strftime("%H%M%S")
+        out = sh("docker", "exec", "haedam-attacker", "python", "/lab/s12_flood.py", "--url", "http://203.0.113.1/api/v1/health",
+                 "--source", src, "--rates", "8", "--stage-seconds", "10", "--duration", "12", "--concurrency", "4",
+                 "--max-rate", "10", "--label", f"panel-{stamp}", "--out", f"/tmp/s12-{stamp}.csv", check=False)
+        log.append({"step": f"{src}에서 /api/v1/health로 가벼운 버스트(8 req/s · 10초)", "cmd": "docker exec haedam-attacker python /lab/s12_flood.py ...",
+                    "result": (out.splitlines() or ["(no output)"])[-1][:160]})
     elif case == "H3":
         run = h3.manipulate()
         USERS[case] = {**run, "user": run["staff_name"]}
@@ -156,7 +168,7 @@ def s4_effect():
 
 
 def effect(case):
-    src = SRC[case]
+    src = atk_src(case)
     if case == "S4":
         out = s4_effect()
         if case in RUNS and len(out) == 2:
@@ -192,8 +204,17 @@ def effect(case):
     return out
 
 
+def atk_src(case):
+    """Attack source IP. S12 picks a fresh pool IP per run, stored in USERS; others are fixed in SRC."""
+    return (USERS.get("S12", {}).get("src") or SRC["S12"]) if case == "S12" else SRC[case]
+
+
 def group_key(case):
-    return USERS.get(case, {}).get("user", "-") if case in ("S1", "S4", "H1", "H2", "H3") else SRC[case]
+    if case in ("S1", "S4", "H1", "H2", "H3"):
+        return USERS.get(case, {}).get("user", "-")
+    if case == "S12":
+        return atk_src("S12")
+    return SRC[case]
 
 
 def latest_ticket(case):
@@ -253,7 +274,7 @@ def release(case):
                {"step": "담당자: 공격 계정 비밀번호 재설정(잠금 해제)", "cmd": "POST /api/v1/response/accounts/<id>/reset", "result": reset}]
         rel = release_webhook(case, t["case_id"])
     steps = [f"{'pfSense' if case != 'H2' and s.get('step') == 1 else '포털'} {s.get('result')}" for s in rel.get("steps") or []]
-    after = http_code("haedam-attacker", SRC[case])
+    after = http_code("haedam-attacker", atk_src(case))
     if case in RUNS:
         RUNS[case]["released"] = {"steps": steps, "attacker": after}
     out = pre + [{"step": "n8n haedam-50 해제(경계 → 앱 순서)", "cmd": "POST /webhook/haedam-release", "result": steps or rel.get("verdict")},
@@ -284,10 +305,11 @@ EXPECT["H2"] = ("403", "공격 출발지 차단·계정 잠금, 피해 시민은
 NORMAL_OK["H2"] = "200"
 EXPECT["S4"] = ("401", "계정 잠금·세션 회수, 맞는 비밀번호도 거부")
 EXPECT["H3"] = ("401", "담당자 계정 잠금, 바뀐 민원은 변경 전 상태로 복원")
+EXPECT["S12"] = ("403", "요청 수 초과 출발지 차단, 다른 시민은 그대로")
 
 
 def graylog_count(case, since):
-    q = f"username:{group_key(case)}" if case in ("S1", "S4", "H1", "H2", "H3") else f"src_ip:{SRC[case]}"
+    q = f"username:{group_key(case)}" if case in ("S1", "S4", "H1", "H2", "H3") else f"src_ip:{group_key(case)}"
     pw = env()["GRAYLOG_ADMIN_PASSWORD"]
     url = ("http://127.0.0.1:9000/api/search/universal/absolute?limit=1&query=" + urllib.parse.quote(q)
            + "&from=" + since.strftime("%Y-%m-%dT%H:%M:%S.000Z") + "&to=" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
@@ -312,7 +334,7 @@ def timeline(case):
     need = {"portal", "pfsense"} if case == "S10" else {"portal"}
     done = need <= {a["via"] for a in blocks}
     if t and done and run["effect"] is None and run["released"] is None:  # 차단이 들어가면(해제 전) 효과를 한 번 자동으로 본다
-        if case in ("S4", "H1", "H2", "H3"):
+        if case in ("S4", "S12", "H1", "H2", "H3"):
             effect(case)
         else:
             run["effect"] = {"attacker": http_code("haedam-attacker", SRC[case]), "normal": http_code("haedam-normal", NORMAL)}
@@ -341,6 +363,7 @@ def timeline(case):
                                                          else "관리자가 담당자 계정 잠금을 풀고, 해제 웹훅이 티켓을 닫습니다." if case == "H3"
                                                          else "담당자가 비밀번호를 재설정해 잠금을 풉니다." if case == "S4"
                                                          else "IP 차단을 풀고, 잠긴 계정은 비밀번호 재설정 뒤 풉니다." if case == "H2"
+                                                         else "해제 웹훅이 포털 IP 차단을 풉니다." if case == "S12"
                                                          else "pfSense를 먼저 풀고 포털을 풉니다."))},
     ]
     return {"steps": steps, "elapsed": elapsed, "ticket": t and {k: t[k] for k in ("ticket_id", "status", "mttd_seconds")}}
@@ -366,7 +389,7 @@ def state():
             out[c] = pending_state(c)
             continue
         try:
-            out[c] = {"src": SRC[c], **timeline(c)}
+            out[c] = {"src": atk_src(c), **timeline(c)}
         except Exception as exc:  # 한 구성이 잠깐 안 될 때도 화면은 유지
             out[c] = {"src": SRC[c], "steps": [], "error": f"{type(exc).__name__}: {str(exc)[:120]}"}
     return out
@@ -446,7 +469,7 @@ S1:["S1 · 로그인 무차별 대입","정상 시민이 계정을 만들고, �
 const CASE_ORDER=["H1","H2","H3","S1","S4","S7","S8","S10","S12"];
 Object.assign(INFO,{
  H1:["H1 · 민원 도배","공격자가 계정을 만들어 민원 8건을 연달아 등록합니다. 그 계정의 민원 작성만 막고(429), 로그인·조회와 다른 시민의 작성은 그대로 둡니다."],H2:["H2 · 타인 민원 엿보기","새 공격자 계정이 다른 시민의 민원 상세를 세 번 요청해 403을 만듭니다. Graylog와 n8n이 탐지한 뒤 공격 출발지만 차단하고, 해제 후에도 타인 민원은 계속 403입니다."],H3:["H3 · 민원 처리 결과 조작","새 담당자 계정이 민원 3건을 연달아 처리 중으로 바꿉니다. Graylog가 같은 담당자의 변경 3건을 잡으면 n8n이 그 계정을 잠그고, 바뀐 민원을 모두 변경 전 스냅샷으로 되돌립니다. 신청자는 계속 조회할 수 있습니다."],
- S4:["S4 · 실패 뒤 성공(계정 탈취)","비밀번호를 아는 공격자가 틀린 비밀번호를 5번 넣은 뒤 맞는 비밀번호로 로그인합니다. Graylog가 같은 계정·출발지의 실패와 성공을 묶으면 n8n이 그 계정을 잠그고 세션을 회수합니다. 계정 주인은 비밀번호 재설정 뒤 새 비밀번호로 들어옵니다."],S7:["S7 · 연결 대기","실습 도구 연결 전입니다."],S12:["S12 · 연결 대기","실습 도구 연결 전입니다."]
+ S4:["S4 · 실패 뒤 성공(계정 탈취)","비밀번호를 아는 공격자가 틀린 비밀번호를 5번 넣은 뒤 맞는 비밀번호로 로그인합니다. Graylog가 같은 계정·출발지의 실패와 성공을 묶으면 n8n이 그 계정을 잠그고 세션을 회수합니다. 계정 주인은 비밀번호 재설정 뒤 새 비밀번호로 들어옵니다."],S7:["S7 · 연결 대기","실습 도구 연결 전입니다."],S12:["S12 · 요청 폭주","한 출발지가 /api/v1/health로 요청을 몰아 보냅니다. Graylog가 60초 창에서 그 출발지의 요청 수가 기준(N=60)을 넘으면 n8n이 그 출발지만 포털에서 차단합니다. 다른 시민은 그대로 쓰고, 사람이 확인한 뒤 차단을 풉니다."]
 });
 let cur="H1",last={};
 function esc(s){return String(s??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
