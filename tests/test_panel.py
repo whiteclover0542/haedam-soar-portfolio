@@ -16,7 +16,8 @@ def test_state_orders_connected_and_unconnected_cases_without_running_unconnecte
 
     assert list(current) == ["H1", "H2", "H3", "S1", "S4", "S7", "S8", "S10", "S12"]
     assert "pending" not in current["H3"] and panel.EXPECT["H3"][0] == "401"
-    for case in ("S4", "S7", "S12"):
+    assert "pending" not in current["S4"] and panel.EXPECT["S4"][0] == "401"
+    for case in ("S7", "S12"):
         assert current[case]["pending"] is True
         assert current[case]["steps"][0]["state"] == "wait"
 

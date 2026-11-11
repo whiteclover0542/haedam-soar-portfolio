@@ -1,4 +1,4 @@
-"""실습 제어판: 버튼으로 S10·S8·S1·H1·H2·H3 공격 → 효과 확인 → 해제. A 작성.
+"""실습 제어판: 버튼으로 S10·S8·S1·S4·H1·H2·H3 공격 → 효과 확인 → 해제. A 작성.
 
 python lab/panel.py        → http://127.0.0.1:8099 (브라우저가 자동으로 열림)
 버튼은 docs/실습-안내.md의 명령을 그대로 실행하고, 실행한 명령과 결과를 화면 로그에 보여 준다.
@@ -24,7 +24,7 @@ from lab.h3 import live as h3  # noqa: E402
 PORT = 8099
 TOKEN = secrets.token_urlsafe(16)
 CASES = ["H1", "H2", "H3", "S1", "S4", "S7", "S8", "S10", "S12"]
-PENDING_CASES = {"S4", "S7", "S12"}  # Graylog 정의·n8n 반입 전(docs/PROGRESS.md)
+PENDING_CASES = {"S7", "S12"}  # Graylog 정의·n8n 반입 전(docs/PROGRESS.md)
 SRC = {**SRC, "H3": "담당자 계정(포털 내부)"}
 USERS = {}    # S1·H1·H2·H3 이번 실행에서 만든 계정 {"user", "pw"} (이름·비밀번호는 메모리에만)
 RUNS = {}     # case → {"at": 공격 시각, "effect": 마지막 효과, "released": 해제 결과}
@@ -65,6 +65,14 @@ def attack(case):
                     "result": result["statuses"]})
         log.append({"step": "공격 시민의 자기 민원 조회(200)", "cmd": f"portal_login.py --source {src} view {user} --ids=<자기 민원>",
                     "result": result["own_status"]})
+    elif case == "S4":
+        user, pw = "zz_a_s4_" + datetime.now().strftime("%H%M%S"), secrets.token_urlsafe(12)
+        reg = portal_login("haedam-normal", NORMAL, "register", user, pw=pw)["statuses"]
+        log.append({"step": f"계정 주인 {user} 가입(정상 시민)", "cmd": f"portal_login.py --source {NORMAL} register {user}", "result": reg})
+        out = portal_login("haedam-attacker", src, "takeover", user, "5", pw=pw)
+        USERS[case] = {"user": user, "pw": pw, "user_id": out.get("user_id")}
+        log.append({"step": "비밀번호를 아는 공격자: 틀린 비밀번호 5번 → 맞는 비밀번호로 로그인 성공",
+                    "cmd": f"portal_login.py --source {src} takeover {user} 5", "result": out["statuses"]})
     elif case == "H3":
         run = h3.manipulate()
         USERS[case] = {**run, "user": run["staff_name"]}
@@ -135,8 +143,24 @@ def h3_effect():
             {"step": "신청자가 민원 3건 조회 → 모두 '접수'로 복원됐으면 200", "cmd": "GET /api/v1/petitions/<id>", "result": restored}]
 
 
+def s4_effect():
+    """S4: the locked account refuses even the right password; other citizens are untouched."""
+    u = USERS.get("S4")
+    if not u:
+        return [{"step": "이번 실행에서 [공격]을 먼저 누르세요", "cmd": "", "result": "-"}]
+    login = portal_login("haedam-attacker", SRC["S4"], "login", u["user"], pw=u["pw"])["statuses"][0]
+    return [{"step": f"공격자가 맞는 비밀번호로 {u['user']} 다시 로그인(잠금이면 401)", "cmd": "portal_login.py login", "result": str(login)},
+            {"step": "정상 시민 접속", "cmd": "docker exec haedam-normal curl http://203.0.113.1/api/v1/health",
+             "result": http_code("haedam-normal", NORMAL)}]
+
+
 def effect(case):
     src = SRC[case]
+    if case == "S4":
+        out = s4_effect()
+        if case in RUNS and len(out) == 2:
+            RUNS[case]["effect"] = {"attacker": out[0]["result"], "normal": out[1]["result"]}
+        return out
     if case == "H3":
         out = h3_effect()
         if case in RUNS and len(out) == 2:
@@ -168,7 +192,7 @@ def effect(case):
 
 
 def group_key(case):
-    return USERS.get(case, {}).get("user", "-") if case in ("S1", "H1", "H2", "H3") else SRC[case]
+    return USERS.get(case, {}).get("user", "-") if case in ("S1", "S4", "H1", "H2", "H3") else SRC[case]
 
 
 def latest_ticket(case):
@@ -186,6 +210,19 @@ def release(case):
     t = latest_ticket(case)
     if not t:
         return [{"step": "해제할 티켓이 없음", "cmd": "", "result": "-"}]
+    if case == "S4":  # 담당자가 비밀번호를 재설정해 잠금을 풀고, haedam-50으로 티켓을 닫는다
+        u = USERS["S4"]
+        new_pw = secrets.token_urlsafe(14)
+        reset = portal_reset(env(), u["user_id"], new_pw)
+        rel = release_webhook(case, t["case_id"])
+        after = str(portal_login("haedam-normal", NORMAL, "login", u["user"], pw=new_pw)["statuses"][0])
+        old = portal_login("haedam-attacker", SRC[case], "login", u["user"], pw=u["pw"])["statuses"][0]
+        if case in RUNS:
+            RUNS[case]["released"] = {"steps": [f"비밀번호 재설정 {reset}", f"티켓 {rel.get('verdict')}"], "attacker": after}
+        return [{"step": "담당자: 계정 주인 비밀번호 재설정(잠금 해제)", "cmd": "POST /api/v1/response/accounts/<id>/reset", "result": reset},
+                {"step": "n8n haedam-50: 티켓 원복 기록", "cmd": "POST /webhook/haedam-release", "result": rel.get("verdict")},
+                {"step": "계정 주인이 새 비밀번호로 로그인", "cmd": "portal_login.py login", "result": after},
+                {"step": "공격자가 알던 옛 비밀번호(401이어야 함)", "cmd": "portal_login.py login", "result": old}]
     if case == "H3":  # 관리자가 확인한 뒤 담당자 계정 잠금을 푼다
         after = str(h3.unlock(USERS["H3"]))
         if case in RUNS:
@@ -242,11 +279,12 @@ NORMAL_OK = {"H1": "201"}  # 나머지는 200
 
 EXPECT["H2"] = ("403", "공격 출발지 차단·계정 잠금, 피해 시민은 그대로 조회")
 NORMAL_OK["H2"] = "200"
+EXPECT["S4"] = ("401", "계정 잠금·세션 회수, 맞는 비밀번호도 거부")
 EXPECT["H3"] = ("401", "담당자 계정 잠금, 바뀐 민원은 변경 전 상태로 복원")
 
 
 def graylog_count(case, since):
-    q = f"username:{group_key(case)}" if case in ("S1", "H1", "H2", "H3") else f"src_ip:{SRC[case]}"
+    q = f"username:{group_key(case)}" if case in ("S1", "S4", "H1", "H2", "H3") else f"src_ip:{SRC[case]}"
     pw = env()["GRAYLOG_ADMIN_PASSWORD"]
     url = ("http://127.0.0.1:9000/api/search/universal/absolute?limit=1&query=" + urllib.parse.quote(q)
            + "&from=" + since.strftime("%Y-%m-%dT%H:%M:%S.000Z") + "&to=" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
@@ -271,7 +309,7 @@ def timeline(case):
     need = {"portal", "pfsense"} if case == "S10" else {"portal"}
     done = need <= {a["via"] for a in blocks}
     if t and done and run["effect"] is None and run["released"] is None:  # 차단이 들어가면(해제 전) 효과를 한 번 자동으로 본다
-        if case in ("H1", "H2", "H3"):
+        if case in ("S4", "H1", "H2", "H3"):
             effect(case)
         else:
             run["effect"] = {"attacker": http_code("haedam-attacker", SRC[case]), "normal": http_code("haedam-normal", NORMAL)}
@@ -298,6 +336,7 @@ def timeline(case):
          "text": (f"{' → '.join(rel['steps']) or '단계 없음'} · 공격자 다시 {rel['attacker']}." if rel
                   else "효과를 확인했으면 [해제]를 누릅니다. " + ("담당자가 포털 대응 API로 작성 제한을 풉니다." if case == "H1"
                                                          else "관리자가 담당자 계정 잠금을 풉니다." if case == "H3"
+                                                         else "담당자가 비밀번호를 재설정해 잠금을 풉니다." if case == "S4"
                                                          else "IP 차단을 풀고, 잠긴 계정은 비밀번호 재설정 뒤 풉니다." if case == "H2"
                                                          else "pfSense를 먼저 풀고 포털을 풉니다."))},
     ]
@@ -404,7 +443,7 @@ S1:["S1 · 로그인 무차별 대입","정상 시민이 계정을 만들고, �
 const CASE_ORDER=["H1","H2","H3","S1","S4","S7","S8","S10","S12"];
 Object.assign(INFO,{
  H1:["H1 · 민원 도배","공격자가 계정을 만들어 민원 8건을 연달아 등록합니다. 그 계정의 민원 작성만 막고(429), 로그인·조회와 다른 시민의 작성은 그대로 둡니다."],H2:["H2 · 타인 민원 엿보기","새 공격자 계정이 다른 시민의 민원 상세를 세 번 요청해 403을 만듭니다. Graylog와 n8n이 탐지한 뒤 공격 출발지만 차단하고, 해제 후에도 타인 민원은 계속 403입니다."],H3:["H3 · 민원 처리 결과 조작","새 담당자 계정이 민원 3건을 연달아 처리 중으로 바꿉니다. Graylog가 같은 담당자의 변경 3건을 잡으면 n8n이 그 계정을 잠그고, 바뀐 민원을 모두 변경 전 스냅샷으로 되돌립니다. 신청자는 계속 조회할 수 있습니다."],
- S4:["S4 · 연결 대기","실습 도구 연결 전입니다."],S7:["S7 · 연결 대기","실습 도구 연결 전입니다."],S12:["S12 · 연결 대기","실습 도구 연결 전입니다."]
+ S4:["S4 · 실패 뒤 성공(계정 탈취)","비밀번호를 아는 공격자가 틀린 비밀번호를 5번 넣은 뒤 맞는 비밀번호로 로그인합니다. Graylog가 같은 계정·출발지의 실패와 성공을 묶으면 n8n이 그 계정을 잠그고 세션을 회수합니다. 계정 주인은 비밀번호 재설정 뒤 새 비밀번호로 들어옵니다."],S7:["S7 · 연결 대기","실습 도구 연결 전입니다."],S12:["S12 · 연결 대기","실습 도구 연결 전입니다."]
 });
 let cur="H1",last={};
 function esc(s){return String(s??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
