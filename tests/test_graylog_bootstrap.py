@@ -61,3 +61,46 @@ def test_bootstrap_lists_h1():
 
     assert DEFINITIONS["lab/h1/graylog/h1-petition-flood.json"] == "haedam-h1"
     assert NOTIFICATIONS["haedam-h1"] == "infra/graylog/notifications/h1-n8n-haedam-h1.json"
+
+
+def test_bootstrap_lists_h2_with_the_foreign_detail_definition():
+    from infra.graylog.bootstrap import DEFINITIONS, NOTIFICATIONS
+
+    assert DEFINITIONS["lab/h2/graylog/h2-petition-access-denied.json"] == "haedam-h2"
+    assert NOTIFICATIONS["haedam-h2"] == "infra/graylog/notifications/h2-n8n-haedam-h2.json"
+
+
+def test_bootstrap_lists_h3_staff_update_definition():
+    from infra.graylog.bootstrap import DEFINITIONS, NOTIFICATIONS
+
+    assert DEFINITIONS["lab/h3/graylog/h3-petition-update.json"] == "haedam-h3"
+    assert NOTIFICATIONS["haedam-h3"] == "infra/graylog/notifications/h3-n8n-haedam-h3.json"
+
+
+def test_h3_notification_uses_only_aggregate_fields_that_graylog_preserves():
+    import json
+    from pathlib import Path
+
+    notification = json.loads(Path("infra/graylog/notifications/h3-n8n-haedam-h3.json").read_text(encoding="utf-8"))
+    template = notification["config"]["body_template"]
+
+    assert "petition_id" not in template
+    assert "revision_id" not in template
+    rendered = template.replace("${event.id}", "event-1").replace(
+        "${event.fields.username}", "staff-1"
+    ).replace("${event.fields.case_id}", "H3").replace("${event.timestamp}", "t1").replace("${event.timestamp_processing}", "t2")
+    assert json.loads(rendered) == {
+        "event_id": "event-1", "asset_id": "haedam-portal", "username": "staff-1", "case_id": "H3",
+        "condition_met_at": "t1", "detected_at": "t2",
+    }
+
+
+def test_h3_definition_copies_restore_identifiers_from_the_source_message():
+    import json
+    from pathlib import Path
+
+    definition = json.loads(Path("lab/h3/graylog/h3-petition-update.json").read_text(encoding="utf-8"))
+
+    fields = definition["field_spec"]
+    assert fields["petition_id"]["providers"][0]["template"] == "${source.petition_id}"
+    assert fields["revision_id"]["providers"][0]["template"] == "${source.revision_id}"

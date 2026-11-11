@@ -23,7 +23,8 @@ def test_complete_workflow_and_private_data(actors):
     citizen, staff = actors["citizen"], actors["staff"]
     data = create(citizen)
     pid = data["id"]
-    assert actors["other"].call("GET", f"/petitions/{pid}").status_code == 404
+    denied = actors["other"].call("GET", f"/petitions/{pid}")
+    assert denied.status_code == 403
     assert actors["other"].call("GET", "/petitions?q=가로등").json["data"]["total"] == 0
     assert actors["admin"].call("GET", f"/petitions/{pid}").status_code == 403
     assert staff.call("PATCH", f"/petitions/{pid}/status", {"status":"in_progress","version":1}).status_code == 403
@@ -35,6 +36,19 @@ def test_complete_workflow_and_private_data(actors):
     final = citizen.call("GET", f"/petitions/{pid}").json["data"]
     assert final["status"] == "completed" and final["reply"] == reply
     assert len(final["history"]) == 4
+
+
+def test_other_citizen_detail_denial_is_logged_for_h2(app, actors):
+    petition = create(actors["citizen"])
+
+    assert actors["other"].call("GET", f"/petitions/{petition['id']}").status_code == 403
+
+    events = [json.loads(line) for line in Path(app.config["EVENT_LOG_PATH"]).read_text(encoding="utf-8").splitlines()]
+    denied = [event for event in events if event["event_type"] == "petition.access_denied"]
+    assert len(denied) == 1
+    assert denied[0]["outcome"] == "failure"
+    assert denied[0]["username"] == "other"
+    assert denied[0]["details"]["status"] == 403
 
 
 def test_stale_version_and_invalid_transition(actors):
@@ -206,6 +220,21 @@ def test_response_auth_idempotency_lock_and_reset(app, actors):
     with app.app_context():
         for receipt in db.session.scalars(select(ResponseReceipt)):
             assert "password" not in json.dumps(receipt.result)
+
+
+def test_response_account_state_is_read_only_and_tracks_lock(app, actors):
+    # H2 해제 워크플로가 담당자의 재설정을 확인하는 조회. 상태를 바꾸지 않는다.
+    client = app.test_client()
+    key = {"X-Response-Key":app.config["RESPONSE_API_KEY"]}
+    path = "/api/v1/response/accounts?username=Citizen"
+    assert client.get(path).status_code == 403
+    assert client.get(path,headers=key,environ_overrides={"REMOTE_ADDR":"192.0.2.1"}).status_code == 403
+    assert client.get(path,headers=key).json["data"] == {"username":"citizen","locked":False}
+    client.post("/api/v1/response/accounts/1/lock",json={},headers={**key,"Idempotency-Key":"state-lock-0001"})
+    assert client.get(path,headers=key).json["data"]["locked"] is True
+    client.post("/api/v1/response/accounts/1/reset",json={"new_password":"State-new-password-123"},headers={**key,"Idempotency-Key":"state-reset-0001"})
+    assert client.get(path,headers=key).json["data"]["locked"] is False
+    assert client.get("/api/v1/response/accounts?username=nobody",headers=key).status_code == 404
 
 
 def test_response_locks_by_username_from_s4_events(app, actors):

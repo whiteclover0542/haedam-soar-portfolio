@@ -1,0 +1,9 @@
+{
+  "title": "n8n haedam-h3 (H3 petition restore)",
+  "description": "H3 staff petition update alert to n8n haedam-37.",
+  "config": {
+    "type": "http-notification-v2", "url": "http://host.docker.internal:5678/webhook/haedam-h3", "method": "POST", "content_type": "JSON", "time_zone": "UTC",
+    "headers": "", "basic_auth": null, "api_key_as_header": false, "api_key": "", "api_secret": null, "skip_tls_verification": false,
+    "body_template": "{\"event_id\":\"${event.id}\",\"asset_id\":\"haedam-portal\",\"username\":\"${event.fields.username}\",\"case_id\":\"${event.fields.case_id}\",\"condition_met_at\":\"${event.timestamp}\",\"detected_at\":\"${event.timestamp_processing}\"}"
+  }
+}

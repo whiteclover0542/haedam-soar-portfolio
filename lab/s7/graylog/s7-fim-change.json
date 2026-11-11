@@ -1,0 +1,100 @@
+{
+  "title": "S7 홈페이지 파일 변조 (file_key)",
+  "description": "S7. 포털 웹 루트(/app/dist)에서 기준본과 다른 파일 변경·추가(Wazuh FIM 550·554)가 있으면 발동. 파일(file_key) 단위. 복원이 만든 경보는 파이프라인 s7-wazuh가 기준 해시로 걸러 신호가 되지 않는다.",
+  "priority": 3,
+  "alert": true,
+  "config": {
+    "type": "aggregation-v1",
+    "query": "signal_kind:\"fim-change\"",
+    "query_parameters": [],
+    "filters": [],
+    "streams": [
+      "REPLACE_wazuh_stream_id"
+    ],
+    "group_by": [
+      "file_key",
+      "s7_change_type"
+    ],
+    "series": [
+      {
+        "id": "count()",
+        "type": "count"
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 0
+        }
+      }
+    },
+    "search_within_ms": 60000,
+    "execute_every_ms": 60000,
+    "use_cron_scheduling": false,
+    "event_limit": 100
+  },
+  "field_spec": {
+    "file_key": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "${source.file_key}",
+          "require_values": true
+        }
+      ]
+    },
+    "change_type": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "${source.s7_change_type}",
+          "require_values": false
+        }
+      ]
+    },
+    "asset_id": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "haedam-portal",
+          "require_values": true
+        }
+      ]
+    },
+    "case_id": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "S7",
+          "require_values": true
+        }
+      ]
+    }
+  },
+  "key_spec": [
+    "file_key"
+  ],
+  "notification_settings": {
+    "grace_period_ms": 0,
+    "backlog_size": 20
+  },
+  "notifications": [],
+  "storage": [
+    {
+      "type": "persist-to-streams-v1",
+      "streams": [
+        "000000000000000000000002"
+      ]
+    }
+  ]
+}

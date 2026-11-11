@@ -3,7 +3,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm.exc import StaleDataError
 
 from ..common import body, fail, ok, pagination, require, text
-from ..models import Petition, PetitionHistory, db
+from ..models import Petition, PetitionHistory, PetitionRevision, db
 from ..integration.events import emit
 
 CATEGORIES = ["도로·교통", "환경·청소", "공원·녹지", "안전·시설", "생활·복지", "기타"]
@@ -73,6 +73,11 @@ def create():
 @bp.get("/<int:petition_id>")
 @require("citizen", "staff")
 def detail(petition_id):
+    if g.user.role == "citizen":
+        existing = db.session.get(Petition, petition_id)
+        if existing is not None and existing.applicant_id != g.user.id:
+            emit("petition.access_denied", "failure", 403, username=g.user.username)
+            fail(403, "FORBIDDEN", "다른 시민의 민원 상세는 조회할 수 없습니다.")
     return ok(get_petition(petition_id).public(True))
 
 
@@ -109,6 +114,9 @@ def update(petition_id):
         fail(409, "CONFLICT", "접수 → 처리 중 → 완료 순서로 처리해 주세요.")
     reply = text(data, "reply", 10, 3000) if target == "completed" else ""
     previous = petition.status
+    revision = PetitionRevision(petition_id=petition.id, actor_id=g.user.id, status=petition.status,
+                                reply=petition.reply, assignee_id=petition.assignee_id, version=petition.version)
+    db.session.add(revision)
     petition.status, petition.reply = target, reply
     db.session.add(PetitionHistory(petition_id=petition.id, actor_id=g.user.id, from_status=previous, to_status=target))
     try:
@@ -116,5 +124,6 @@ def update(petition_id):
     except StaleDataError:
         db.session.rollback()
         fail(409, "CONFLICT", "다른 요청이 먼저 처리했습니다. 새로고침해 주세요.")
-    emit("petition.updated", "success", 200, username=g.user.username)
+    emit("petition.updated", "success", 200, username=g.user.username,
+         petition_id=petition.id, revision_id=revision.id)
     return ok(petition.public(True))

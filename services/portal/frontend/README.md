@@ -1,6 +1,6 @@
 # 해담시청 민원포털 · React 프론트
 
-시민의 목소리를 담다, 해담시청. 사용자 결정(2026-10-19): React + Flask. React 19, React Router 7, Vite 8. Node 22.12+ (검증 24.15.0), npm 11.12.1. 정확한 의존성은 package-lock.json으로 잠근다. 담당: 김명준 + Codex, 독립 리뷰어 별도 배정.
+시민의 목소리를 담다, 해담시청. 사용자 결정(2026-10-19): React + Flask. React 19, React Router 7, Vite 8. Node 22.12+ (검증 24.15.0), npm 11.12.1. 정확한 의존성은 package-lock.json으로 잠근다. 담당: B + Codex, 독립 리뷰어 별도 배정.
 
 ## 준비와 실행
 

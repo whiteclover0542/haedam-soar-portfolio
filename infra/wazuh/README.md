@@ -1,6 +1,6 @@
 # Wazuh 4.9.2 single-node
 
-원본 구성: Wazuh Inc. `wazuh-docker` v4.9.2 single-node(GPLv2). 단일 PC 조정: 반소람.
+원본 구성: Wazuh Inc. `wazuh-docker` v4.9.2 single-node(GPLv2). 단일 PC 조정: A.
 최상위 `compose.yaml`의 `wazuh` 프로필로 띄운다. manager 10.250.0.4, indexer 10.250.0.6, dashboard 10.250.0.7(https://127.0.0.1:5601).
 
 ## 처음 설치

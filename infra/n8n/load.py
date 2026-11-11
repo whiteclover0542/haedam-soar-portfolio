@@ -15,12 +15,13 @@ from infra.n8n.make_credentials import attach_credentials, build_credentials  # 
 ROOT = Path(__file__).resolve().parents[2]
 CONTAINER = "haedam-n8n"
 # Only what the current stage uses goes into n8n (the other files stay in the repo); each gets a role tag for
-# filtering in the n8n list. Add a line here when a stage (S4·S7·S12) starts.
+# filtering in the n8n list. Add a line here when a stage (S7·S12) starts.
 # Everything listed is published: webhooks need it, and n8n 2.x refuses to run an unpublished sub-workflow.
 SCOPE = {
-    "haedamS1Main01": "메인", "haedamS8S10Main01": "메인", "haedamH1Main01": "메인",
+    "haedamS1Main01": "메인", "haedamS4Main01": "메인", "haedamS8S10Main01": "메인", "haedamH1Main01": "메인", "haedamH2Main01": "메인", "haedamH3Main01": "메인", "haedamS12Main01": "메인", "haedamS7Main01": "메인",
     "haedamResultLog01": "부품", "haedamDiscord01": "부품", "haedamPortalIp01": "부품", "haedamPfsense01": "부품",
-    "haedamPortalPosting01": "부품",
+    "haedamPortalPosting01": "부품", "haedamAccountLock01": "부품",
+    "haedamWazuhRestore01": "부품", "haedamWazuhToken01": "부품",
     "haedamRelease01": "점검·해제", "haedamTicketCheck01": "점검·해제", "haedamPfStatusCheck01": "점검·해제",
 }
 NOT_PUBLISHED = {"haedamPfStatusCheck01"}  # manual trigger only; run with `n8n execute`

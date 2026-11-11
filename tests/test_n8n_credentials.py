@@ -49,7 +49,51 @@ def test_h1_workflows_derived():
     assert "haedam-h1" in text and "haedamPortalPosting01" in text and "haedamPortalIp01" not in text
     assert "restrict_posting" in text and "'112'" not in text
     sub_text = json.dumps(sub, ensure_ascii=False)
-    assert "/api/v1/response/accounts/posting" in sub_text and "restricted: true" in sub_text and "/accounts/lock" not in sub_text
+    # restricted는 action에서 파생된다(restrict→true, release→false). 본문은 그 값을 동적으로 보낸다(해제도 같은 워크플로로).
+    assert ("/api/v1/response/accounts/posting" in sub_text and "b.action === 'restrict'" in sub_text
+            and "restricted: $('" in sub_text and "/accounts/lock" not in sub_text)
+
+
+def test_h2_workflow_derived():
+    main = load(Path("infra/n8n/workflows/haedam-36-h2-main.json"))
+    assert main["id"] == "haedamH2Main01"
+    text = json.dumps(main, ensure_ascii=False)
+    assert "haedam-h2" in text                                   # 전용 webhook 경로
+    assert "'H2'" in text and "case_id must be H2" in text        # H2만 처리
+    assert "haedamAccountLock01" in text and "haedamPortalIp01" in text  # 계정 잠금 + IP 차단
+    assert "haedamPfsense01" not in text                          # pfSense 조치는 교체됨
+    assert "action: 'lock'" in text and "bot: '111'" in text and "bot: '112'" in text
+    # 해제(haedam-50): 잠금만 남은 티켓은 포털 상태를 읽어 풀렸을 때만 unlock을 기록한다. 직접 재설정하지 않는다.
+    release = json.dumps(load(Path("infra/n8n/workflows/haedam-50-release.json")), ensure_ascii=False)
+    assert "잠금만 남음?" in release and "/api/v1/response/accounts?username=" in release and "action: 'unlock'" in release
+    assert "/reset" not in release and "held_still_locked" in release
+
+
+def test_h3_workflow_locks_before_requesting_snapshot_restore():
+    main = load(Path("infra/n8n/workflows/haedam-37-h3-main.json"))
+    text = json.dumps(main, ensure_ascii=False)
+
+    assert main["id"] == "haedamH3Main01" and main["active"] is False
+    assert "haedam-h3" in text and "case_id must be H3" in text
+    assert text.index("haedamAccountLock01") < text.index("/response/petitions/")
+
+
+def test_h3_workflow_notifies_discord_after_restore():
+    main = load(Path("infra/n8n/workflows/haedam-37-h3-main.json"))
+    text = json.dumps(main, ensure_ascii=False)
+
+    assert "haedamDiscord01" in text
+    assert text.index("/response/petitions/") < text.index("haedamDiscord01")
+
+
+def test_h3_workflow_restores_the_alerted_staffs_latest_snapshot_without_aggregate_source_fields():
+    main = load(Path("infra/n8n/workflows/haedam-37-h3-main.json"))
+    validate = next(node for node in main["nodes"] if node["id"] == "validate")["parameters"]["jsCode"]
+    restore = next(node for node in main["nodes"] if node["id"] == "restore")["parameters"]
+
+    assert "'petition_id','revision_id'" not in validate
+    assert "/response/petitions/latest-revision/restore" in restore["url"]
+    assert "username" in restore["jsonBody"]
 
 
 def test_discord_is_optional_and_wired_when_set():
@@ -60,10 +104,12 @@ def test_discord_is_optional_and_wired_when_set():
     assert node["credentials"]["discordWebhookApi"]["id"] in {c["id"] for c in creds}
 
 
-def test_discord_notification_shows_severity_and_response_rates():
+def test_discord_notification_shows_risk_score_and_dashboard_link():
     workflow = json.loads(Path("infra/n8n/workflows/haedam-11-discord-notify.json").read_text(encoding="utf-8"))[0]
     code = next(node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.code" and node["name"].startswith("Discord"))["parameters"]["jsCode"]
 
-    assert "response_rate" in code
-    assert "recovery_rate" in code
-    assert "Critical" in code
+    assert "risk_score" in code
+    assert "위험도:" in code
+    assert "dashboard_url" in code
+    assert "보안 대시보드 열기" in code
+    assert "심각" in code

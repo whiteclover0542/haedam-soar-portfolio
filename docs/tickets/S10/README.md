@@ -1,6 +1,6 @@
 # S10 경계 차단 · 포털 스캔 · 로그인 반복
 
-- **원작:** 김명준(B) — 탐지 정의 `lab/s8s10/graylog/s10-three-layer.json`, 입력 도구 `tools/s8s10_input.py`, pfSense 대응 도구 `lab/pfsense/`
+- **원작:** B — 탐지 정의 `lab/s8s10/graylog/s10-three-layer.json`, 입력 도구 `tools/s8s10_input.py`, pfSense 대응 도구 `lab/pfsense/`
 - **이 PC에서 보는 것:** 서버(포털)·Graylog·pfSense·n8n·티켓 저장소가 한 번에 맞물리는지
 
 ## 시나리오
@@ -34,6 +34,7 @@ python lab/run_ticket.py S10 --restore
 | 4 | 2026-11-09 04:16:10 | T-20261109-0009 | pass | 예 | 0.735초 | 3.106초 | 39.955초 | 000 / 200 | 200 |
 | 5 | 2026-11-09 04:31:18 | T-20261109-0010 | pass | 예 | 0.248초 | 2.992초 | 31.037초 | 000 / 200 | 200 |
 | 6 | 2026-11-09 06:28:19 | T-20261109-0002 | pass | 예 | 0.106초 | 5.189초 | 19.608초 | 000 / 200 | 200 |
+| 7 | 2026-11-09 08:27:13 | — | pass (기준선) | 아니요 | — | — | — | — / — | — |
 <!-- runs:end -->
 
 - **MTTD:** Graylog 이벤트의 `timestamp`(조건 충족) → `timestamp_processing`(탐지). 평가 주기와 무관한 내부 지연이다.

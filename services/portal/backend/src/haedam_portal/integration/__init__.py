@@ -11,7 +11,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from werkzeug.security import generate_password_hash
 
 from ..common import body, client_ip, fail, normalize_ip, ok, text
-from ..models import BlockedIp, ResponseReceipt, User, db, iso, now
+from ..models import BlockedIp, Petition, PetitionRevision, ResponseReceipt, User, db, iso, now
 from .events import emit
 
 bp = Blueprint("response", __name__, url_prefix="/api/v1/response")
@@ -79,7 +79,7 @@ def account_lock_by_username():
 
 @bp.post("/accounts/posting")
 def posting_response():
-    # H1 민원 도배(반소람): 그 계정의 민원 작성만 제한/해제한다. 로그인·조회·세션은 건드리지 않는다.
+    # H1 민원 도배(A): 그 계정의 민원 작성만 제한/해제한다. 로그인·조회·세션은 건드리지 않는다.
     authenticate_response()
     data = body()
     username = text(data, "username", 1, 40).lower()
@@ -127,6 +127,88 @@ def account_action(target_filter, scope, action, data):
     db.session.commit()
     emit("auth.account_locked" if action == "lock" else "auth.password_reset", "success", 200, username=target.username)
     return ok(result)
+
+
+@bp.get("/accounts")
+def account_state():
+    # 해제 워크플로가 담당자의 재설정(잠금 해제)을 확인할 때만 쓰는 읽기 전용 조회.
+    authenticate_response()
+    username = request.args.get("username", "").strip().lower()[:40]
+    target = db.session.scalar(select(User).where(User.username == username)) if username else None
+    if not target:
+        fail(404, "NOT_FOUND", "계정을 찾을 수 없습니다.")
+    return ok({"username": target.username, "locked": target.locked})
+
+
+def apply_snapshot(petition, revision):
+    """Apply one immutable snapshot to a locked petition and describe the change."""
+    changed = (petition.status, petition.reply, petition.assignee_id) != (
+        revision.status, revision.reply, revision.assignee_id)
+    petition.status = revision.status
+    petition.reply = revision.reply
+    petition.assignee_id = revision.assignee_id
+    return {"petition_id": petition.id, "revision_id": revision.id, "status": petition.status,
+            "reply": petition.reply, "assignee_id": petition.assignee_id, "changed": changed}
+
+
+def save_restore(result, changes, username, request_key, fingerprint):
+    db.session.add(ResponseReceipt(request_key=request_key, fingerprint=fingerprint, result=result))
+    db.session.commit()
+    if any(item["changed"] for item in changes):
+        emit("petition.restored", "success", 200, username=username)
+    return ok(result)
+
+
+H3_RESTORE_WINDOW = timedelta(minutes=15)  # Graylog 5-minute window + evaluation and n8n delay
+
+
+@bp.post("/petitions/latest-revision/restore")
+def restore_recent_petitions_for_staff():
+    """H3: restore every petition the alerted staff changed recently to its earliest snapshot in the window."""
+    authenticate_response()
+    username = text(body(), "username", 1, 40).lower()
+    request_key, fingerprint = request_digests({"username": username, "action": "latest_revision_restore"})
+    previous = replayed(request_key, fingerprint)
+    if previous:
+        return ok(previous)
+    revisions = db.session.scalars(
+        select(PetitionRevision).join(User, PetitionRevision.actor_id == User.id)
+        .where(User.username == username, PetitionRevision.created_at >= now() - H3_RESTORE_WINDOW)
+        .order_by(PetitionRevision.id)
+    ).all()
+    earliest = {}
+    for revision in revisions:
+        earliest.setdefault(revision.petition_id, revision)
+    if not earliest:
+        fail(404, "NOT_FOUND", "복원할 담당자 변경 이력을 찾을 수 없습니다.")
+    petitions = db.session.scalars(
+        select(Petition).where(Petition.id.in_(earliest)).order_by(Petition.id).with_for_update()).all()
+    restored = [apply_snapshot(petition, earliest[petition.id]) for petition in petitions]
+    return save_restore({"username": username, "restored": restored}, restored, username, request_key, fingerprint)
+
+
+@bp.post("/petitions/<int:petition_id>/restore")
+def restore_petition(petition_id):
+    """Restore one petition from its immutable H3 pre-change snapshot."""
+    authenticate_response()
+    data = body()
+    revision_id = data.get("revision_id")
+    if type(revision_id) is not int:
+        fail(400, "VALIDATION_ERROR", "revision_id는 정수여야 합니다.")
+    request_key, fingerprint = request_digests({"petition_id": petition_id, "revision_id": revision_id})
+    petition = db.session.scalar(select(Petition).where(Petition.id == petition_id).with_for_update())
+    if not petition:
+        fail(404, "NOT_FOUND", "민원을 찾을 수 없습니다.")
+    revision = db.session.get(PetitionRevision, revision_id)
+    if not revision:
+        fail(404, "NOT_FOUND", "복원 스냅샷을 찾을 수 없습니다.")
+    if revision.petition_id != petition_id:
+        fail(409, "CONFLICT", "다른 민원의 스냅샷은 복원할 수 없습니다.")
+    previous = replayed(request_key, fingerprint)
+    if previous:
+        return ok(previous)
+    result = apply_snapshot(petition, revision)
+    return save_restore(result, [result], revision.actor.username, request_key, fingerprint)
 
 
 @bp.get("/ips")

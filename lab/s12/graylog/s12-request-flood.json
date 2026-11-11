@@ -1,0 +1,80 @@
+{
+  "title": "S12 요청 폭주 (src_ip 1분 요청 수)",
+  "description": "S12 요청 폭주(src_ip 1분 요청 수). 이 PC(한 대) 실습값 N=60: 짧고 가벼운 버스트가 60초 창에서 이를 넘으면 발동. 스트림은 이 저장소 포털 스트림(REPLACE). 2026-11-11 반입. 차단은 요청 수 기준(탐지가 뜨면 health 게이트 없이 차단).",
+  "priority": 2,
+  "alert": true,
+  "config": {
+    "type": "aggregation-v1",
+    "query": "source:haedam-portal AND event_type:web.request",
+    "query_parameters": [],
+    "filters": [],
+    "streams": [
+      "REPLACE_haedam-portal_stream_id"
+    ],
+    "group_by": [
+      "src_ip"
+    ],
+    "series": [
+      {
+        "id": "count()",
+        "type": "count",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 60
+        }
+      }
+    },
+    "search_within_ms": 60000,
+    "execute_every_ms": 30000,
+    "use_cron_scheduling": false,
+    "event_limit": 100
+  },
+  "field_spec": {
+    "src_ip": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "${source.src_ip}",
+          "require_values": true
+        }
+      ]
+    },
+    "case_id": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "S12",
+          "require_values": true
+        }
+      ]
+    }
+  },
+  "key_spec": [
+    "src_ip"
+  ],
+  "notification_settings": {
+    "grace_period_ms": 60000,
+    "backlog_size": 20
+  },
+  "notifications": [],
+  "storage": [
+    {
+      "type": "persist-to-streams-v1",
+      "streams": [
+        "000000000000000000000002"
+      ]
+    }
+  ]
+}

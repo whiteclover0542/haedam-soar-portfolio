@@ -3,14 +3,18 @@
 python portal_login.py --source 203.0.113.100 register USER   # password from env PW
 python portal_login.py --source 203.0.113.11 fail USER 9       # random wrong passwords, never printed
 python portal_login.py --source 203.0.113.100 login USER       # password from env PW
-python portal_login.py --source 203.0.113.11 post USER 8        # log in (env PW), then file N petitions (H1)
-Prints one JSON line: the HTTP status of every request. Bodies, cookies and passwords are never printed.
+python portal_login.py --source 203.0.113.11 post USER 8        # log in (env PW), then file N petitions (H1); also prints their ids
+python portal_login.py --source 203.0.113.11 view USER --ids 99,100,101   # log in (env PW), open those petition details (H2)
+python portal_login.py --source 203.0.113.11 takeover USER 5 --hold 240   # S4: N wrong, then the right password (env PW);
+    # keep that session and poll a login-only page every 3 s until it is revoked (or --hold seconds pass)
+Prints one JSON line: the HTTP status of every request (and petition ids for post). Bodies, cookies and passwords are never printed.
 """
 import argparse
 import http.client
 import json
 import os
 import secrets
+import time
 from http.cookies import SimpleCookie
 
 HOST = "203.0.113.1"  # pfSense WAN → portal
@@ -52,21 +56,50 @@ class Session:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", required=True)
-    ap.add_argument("mode", choices=["register", "fail", "login", "post"])
+    ap.add_argument("mode", choices=["register", "fail", "login", "post", "view", "takeover"])
     ap.add_argument("username")
     ap.add_argument("count", nargs="?", type=int, default=1)
+    ap.add_argument("--ids", default="", help="view: comma-separated petition ids")
+    ap.add_argument("--hold", type=int, default=0, help="takeover: seconds to keep polling the stolen session")
     a = ap.parse_args()
     s = Session(a.source)
     out = {"csrf": s.csrf(), "statuses": []}
-    if a.mode == "post":
+    if a.mode in ("post", "view"):
         status, raw = s.call("POST", "/api/v1/auth/login", {"username": a.username, "password": os.environ["PW"]})
         out["login"] = status
         if status == 200:
-            s.token = json.loads(raw)["data"]["csrf_token"]
+            data = json.loads(raw)["data"]
+            s.token, out["user_id"] = data["csrf_token"], data["user"]["id"]
+    if a.mode == "post":
+        out["ids"] = []
         for i in range(a.count):
-            body = {"title": f"실습 민원 {i + 1}번 확인 요청", "content": "H1 실습용 합성 민원입니다. 처리하지 않아도 됩니다.", "category": "기타"}
-            out["statuses"].append(s.call("POST", "/api/v1/petitions", body)[0])
+            body = {"title": f"실습 민원 {i + 1}번 확인 요청", "content": "실습용 합성 민원입니다. 처리하지 않아도 됩니다.", "category": "기타"}
+            status, raw = s.call("POST", "/api/v1/petitions", body)
+            out["statuses"].append(status)
+            if status == 201:
+                out["ids"].append(json.loads(raw)["data"]["id"])
         out["list"] = s.call("GET", "/api/v1/petitions")[0]
+        print(json.dumps(out))
+        return
+    if a.mode == "view":  # H2: a citizen opening other citizens' petitions gets 403 (petition.access_denied)
+        out["statuses"] = [s.call("GET", f"/api/v1/petitions/{int(i)}")[0] for i in a.ids.split(",") if i.strip()]
+        print(json.dumps(out))
+        return
+    if a.mode == "takeover":
+        for _ in range(a.count):
+            out["statuses"].append(s.call("POST", "/api/v1/auth/login", {"username": a.username,
+                                                                        "password": "Synthetic-wrong-" + secrets.token_hex(8)})[0])
+        status, raw = s.call("POST", "/api/v1/auth/login", {"username": a.username, "password": os.environ["PW"]})
+        out["statuses"].append(status)
+        if status == 200:
+            data = json.loads(raw)["data"]
+            s.token, out["user_id"] = data["csrf_token"], data["user"]["id"]
+        start, out["session"] = time.monotonic(), [s.call("GET", "/api/v1/petitions")[0]]
+        while out["session"][-1] == 200 and time.monotonic() - start < a.hold:
+            time.sleep(3)
+            out["session"].append(s.call("GET", "/api/v1/petitions")[0])
+        out["revoked_after_s"] = round(time.monotonic() - start, 1) if out["session"][-1] != 200 else None
+        out["session"] = [out["session"][0], out["session"][-1]]  # first and last status only
         print(json.dumps(out))
         return
     for _ in range(a.count):
