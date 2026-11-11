@@ -1,6 +1,6 @@
 """Run one ticket end to end on the single-PC stack and append the result to docs/tickets/<ID>/runs.jsonl.
 
-python lab/run_ticket.py {S1|S4|S8|S10|H1|H2} [--restore] [--baseline]
+python lab/run_ticket.py {S1|S4|S8|S10|S12|H1|H2} [--restore] [--baseline]
 Steps: precheck → input from haedam-attacker → wait for the ticket (≤180 s) → effect (attacker blocked, normal 200)
 → with --restore: release via n8n haedam-50 (pfSense first, then portal) → attacker 200 again.
 H2 restore follows the person's order: release (IP) → held while still locked → person resets the password → release again.
@@ -20,11 +20,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = {"S1": "203.0.113.11", "S4": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11", "H2": "203.0.113.11"}
+SRC = {"S1": "203.0.113.11", "S4": "203.0.113.11", "S12": "203.0.113.42", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11", "H2": "203.0.113.11"}
 # S4: fresh account per run, but each run makes ~8 logins from the same source and the portal allows 20 per source
 # in 5 minutes (LOGIN_RATE_LIMIT), so runs closer than 5 minutes get 429 instead of the checked status.
-WINDOW_MIN = {"S1": 30, "S4": 5, "S8": 15, "S10": 15, "H1": 10, "H2": 5}
-SEAT = {"S1": "A", "S4": "A", "S8": "B", "S10": "B", "H1": "A", "H2": "C"}
+WINDOW_MIN = {"S1": 30, "S4": 5, "S8": 15, "S10": 15, "S12": 2, "H1": 10, "H2": 5}
+SEAT = {"S1": "A", "S4": "A", "S8": "B", "S10": "B", "S12": "D", "H1": "A", "H2": "C"}
 H1_POSTS = 8  # 탐지 기준 N=5보다 넉넉히(초안). 기준선은 --baseline
 S4_FAILS, S4_HOLD = 5, 180  # 탐지: 10분 안 실패·성공 합계 6건 이상(card(rule)>1, count()>5)
 H2_VIEWS = {False: 3, True: 2}  # 탐지는 5분 안 3건 이상(초안). 기준선: 잘못 연 링크 2건
@@ -204,6 +204,18 @@ def main():
         run["input_at"] = datetime.now(timezone.utc).isoformat()
         run["input"] = portal_login("haedam-attacker", src, "view", user, "--ids=" + ",".join(map(str, ids[:H2_VIEWS[a.baseline]])), pw=pw)
         group_key = user
+    elif case == "S12":
+        # Very light request burst from .41 (4 req/s for 60 s) so Graylog counts > N while the load stays tiny.
+        # The flood keeps running until the source is blocked (403) or its duration ends.
+        sh("docker", "exec", "haedam-attacker", "ip", "addr", "add", f"{src}/24", "dev", "eth0", check=False)
+        sh("docker", "cp", str(ROOT / "tools/s12_flood.py"), "haedam-attacker:/lab/s12_flood.py")
+        run["input_at"] = datetime.now(timezone.utc).isoformat()
+        out = sh("docker", "exec", "haedam-attacker", "python", "/lab/s12_flood.py", "--url",
+                 "http://203.0.113.1/api/v1/health", "--source", src, "--rates", "4", "--stage-seconds", "60",
+                 "--duration", "70", "--concurrency", "3", "--max-rate", "10", "--label", f"s12-{run['run_id']}",
+                 "--out", f"/tmp/s12-{run['run_id']}.csv", check=False)
+        run["input"] = (out.splitlines() or ["(no output)"])[-1][:200]
+        group_key = src
     elif a.baseline and case != "H1":
         # Normal citizen from the normal source: 3 wrong passwords then a success — below every S1/S8/S10 threshold.
         user, pw = f"zz_base_{case.lower()}_{run['run_id']}", secrets.token_urlsafe(12)
@@ -250,7 +262,7 @@ def main():
         group_key = src
     # Tickets already present for this key, so we only count ones our input creates. S4's input waits until the session
     # is revoked (after the ticket exists) and its account is new, so nothing came before it.
-    before = set() if case == "S4" and not a.baseline else set(tickets_for(group_key))
+    before = set() if case in ("S4", "S12") and not a.baseline else set(tickets_for(group_key))
     print("input", run["input"], flush=True)
 
     # Baseline waits for any new ticket (no S10 pfSense requirement); a real run keeps the case-specific wait.
