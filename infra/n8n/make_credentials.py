@@ -10,7 +10,8 @@ CALLERS = ["haedam-s1", "haedam-s4", "haedam-s8-s10", "haedam-s12", "haedam-s7",
 HTTP_HEADER_AUTH = {"haedamResultLog01": "ticket-store (C)",
                     "haedamPortalIp01": "haedam-portal-response",
                     "haedamAccountLock01": "haedam-portal-response",
-                    "haedamPortalPosting01": "haedam-portal-response"}
+                    "haedamPortalPosting01": "haedam-portal-response",
+                    "haedamRelease01": "haedam-portal-response"}  # H2 잠금 해제 확인(읽기 전용 조회)
 DISCORD = "Discord Webhook account"
 
 

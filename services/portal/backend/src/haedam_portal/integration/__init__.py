@@ -129,6 +129,17 @@ def account_action(target_filter, scope, action, data):
     return ok(result)
 
 
+@bp.get("/accounts")
+def account_state():
+    # 해제 워크플로가 담당자의 재설정(잠금 해제)을 확인할 때만 쓰는 읽기 전용 조회.
+    authenticate_response()
+    username = request.args.get("username", "").strip().lower()[:40]
+    target = db.session.scalar(select(User).where(User.username == username)) if username else None
+    if not target:
+        fail(404, "NOT_FOUND", "계정을 찾을 수 없습니다.")
+    return ok({"username": target.username, "locked": target.locked})
+
+
 @bp.get("/ips")
 def blocked_ips():
     authenticate_response()

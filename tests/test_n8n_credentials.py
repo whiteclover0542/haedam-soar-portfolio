@@ -54,13 +54,19 @@ def test_h1_workflows_derived():
             and "restricted: $('" in sub_text and "/accounts/lock" not in sub_text)
 
 
-def test_h2_workflow_is_a_separate_portal_ip_block_flow():
+def test_h2_workflow_derived():
     main = load(Path("infra/n8n/workflows/haedam-36-h2-main.json"))
-    text = json.dumps(main, ensure_ascii=False)
-
     assert main["id"] == "haedamH2Main01"
-    assert "haedam-h2" in text and "haedamPortalIp01" in text
-    assert "case_id: 'H2'" in text and "action: 'block'" in text
+    text = json.dumps(main, ensure_ascii=False)
+    assert "haedam-h2" in text                                   # 전용 webhook 경로
+    assert "'H2'" in text and "case_id must be H2" in text        # H2만 처리
+    assert "haedamAccountLock01" in text and "haedamPortalIp01" in text  # 계정 잠금 + IP 차단
+    assert "haedamPfsense01" not in text                          # pfSense 조치는 교체됨
+    assert "action: 'lock'" in text and "bot: '111'" in text and "bot: '112'" in text
+    # 해제(haedam-50): 잠금만 남은 티켓은 포털 상태를 읽어 풀렸을 때만 unlock을 기록한다. 직접 재설정하지 않는다.
+    release = json.dumps(load(Path("infra/n8n/workflows/haedam-50-release.json")), ensure_ascii=False)
+    assert "잠금만 남음?" in release and "/api/v1/response/accounts?username=" in release and "action: 'unlock'" in release
+    assert "/reset" not in release and "held_still_locked" in release
 
 
 def test_discord_is_optional_and_wired_when_set():

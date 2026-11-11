@@ -1,7 +1,7 @@
 [
  {
   "id": "haedamH2Main01",
-  "name": "haedam-36 H2 계정 탈취 시도 → 출발지 차단 (A)",
+  "name": "haedam-36 H2 타인 민원 엿보기 → 계정 잠금·IP 차단 (C)",
   "active": false,
   "nodes": [
    {
@@ -20,11 +20,11 @@
      "options": {},
      "authentication": "headerAuth"
     },
-    "webhookId": "haedam-h2",
+    "webhookId": "haedam-s8-s10",
     "credentials": {
      "httpHeaderAuth": {
       "id": "",
-      "name": "haedam-h2 caller"
+      "name": "haedam-s8-s10 caller"
      }
     }
    },
@@ -38,7 +38,7 @@
      0
     ],
     "parameters": {
-     "jsCode": "\nfunction protectedIp(ip) {\n  if (!/^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(ip)) return 'bad_ip';\n  if (ip.startsWith('10.250.0.')) return 'team_vpn';\n  if (ip === '203.0.113.10') return 'kali_host';\n  if (ip === '203.0.113.12') return 'normal_control';   // B 요청(10/26): 정상 대조용 출발지\n  const m = ip.match(/^203\\.0\\.113\\.(\\d+)$/);\n  if (m && +m[1] >= 100 && +m[1] <= 109) return 'normal_source';\n  return null;\n}\nconst CFG = { dry_run: true, store_real: false };   // 기본은 관찰 모드. 실제 티켓 기록은 케이스별로 본문 store_real:true일 때만(11/03 D), 실제 조치는 dry_run:false + 별도 승인\n// H2 로그인 반복 실패(무차별 대입): count()>8 · 30분 · username + src_ip (A, 임계는 기획서 값, 측정 전)\nconst t = { ...($input.first().json.body || {}) };\nconst iso = (v) => (typeof v === 'string' && /T.*(Z|[+-]\\d\\d:?\\d\\d)$/.test(v)) && Number.isFinite(Date.parse(v)) ? v : null;\nconst T = { first_attack_at: iso(t.first_attack_at), condition_met_at: iso(t.condition_met_at), detected_at: iso(t.detected_at), received_at: new Date().toISOString() };\nconst missing = ['event_id', 'asset_id', 'src_ip', 'username'].filter(k => !t[k]);\nif (missing.length) return [{ json: { ok: false, verdict: 'invalid_input', missing } }];\nconst p = protectedIp(t.src_ip);\nif (p) return [{ json: { ok: true, verdict: 'protected_source', reason: p, case_id: 'H2', event_id: t.event_id, src_ip: t.src_ip } }];\nif (t.dry_run === false) CFG.dry_run = false;   // 실제 포털 차단은 Graylog 알림 본문의 dry_run:false로만 켠다(기본 true). 켜기 전 D 명시 승인(10/28)\nif (t.store_real === true) CFG.store_real = true;   // 실제 티켓 기록(C 저장소)은 본문의 store_real:true(불리언)로만 켠다(기본 false). 케이스별 회차에서만 사용\nconst X = { seat: 'A', case_id: 'H2', title: 'H2 로그인 반복 실패(무차별 대입)', event_id: t.event_id, asset_id: t.asset_id, src_ip: t.src_ip, username: t.username,\n  count: t.count ?? null, group_key: t.username, cfg: CFG, times: T, expected: [{ bot: '112', via: 'portal', action: 'block', target: t.src_ip }] };\nreturn [{ json: { proceed: true, mode: 'check', seat: 'A', group_key: t.username, ctx: X } }];\n"
+     "jsCode": "\nfunction protectedIp(ip) {\n  if (!/^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(ip)) return 'bad_ip';\n  if (ip.startsWith('10.250.0.')) return 'team_vpn';\n  if (ip === '203.0.113.10') return 'kali_host';\n  if (ip === '203.0.113.12') return 'normal_control';\n  const m = ip.match(/^203\\.0\\.113\\.(\\d+)$/);\n  if (m && +m[1] >= 100 && +m[1] <= 109) return 'normal_source';\n  return null;\n}\nfunction protectedUser(u) {\n  if (typeof u !== 'string' || !/^[a-z0-9_]{3,40}$/.test(u)) return 'bad_username';\n  if (['admin_demo', 'staff_demo', 'citizen_demo'].includes(u)) return 'demo_account';\n  return null;\n}\nconst CFG = { dry_run: true, store_real: false };   // 기본 관찰 모드. 실제 조치는 본문 dry_run:false, 실제 기록은 store_real:true일 때만\n// H2 타인 민원 상세 반복 조회(petition.access_denied 403) · 5분 · username+src_ip (C). 계정 잠금(111) + 출발지 IP 차단(112).\nconst t = { ...($input.first().json.body || {}) };\nconst iso = (v) => (typeof v === 'string' && /T.*(Z|[+-]\\d\\d:?\\d\\d)$/.test(v)) && Number.isFinite(Date.parse(v)) ? v : null;\nconst T = { first_attack_at: iso(t.first_attack_at), condition_met_at: iso(t.condition_met_at), detected_at: iso(t.detected_at), received_at: new Date().toISOString() };\nconst missing = ['event_id', 'asset_id', 'src_ip', 'username', 'case_id'].filter(k => !t[k]);\nif (missing.length) return [{ json: { ok: false, verdict: 'invalid_input', missing } }];\nif (t.case_id !== 'H2') return [{ json: { ok: false, verdict: 'invalid_input', detail: 'case_id must be H2' } }];\nconst pi = protectedIp(t.src_ip);\nif (pi) return [{ json: { ok: true, verdict: 'protected_source', reason: pi, case_id: t.case_id, event_id: t.event_id, src_ip: t.src_ip } }];\nconst pu = protectedUser(t.username);\nif (pu) return [{ json: { ok: true, verdict: 'protected_account', reason: pu, case_id: t.case_id, event_id: t.event_id, username: t.username } }];\nif (t.dry_run === false) CFG.dry_run = false;\nif (t.store_real === true) CFG.store_real = true;\nconst expected = [{ bot: '112', via: 'portal', action: 'block', target: t.src_ip }, { bot: '111', via: 'portal', action: 'lock', target: t.username }];\nconst X = { seat: 'C', case_id: 'H2', title: 'H2 타인 민원 엿보기(계정 잠금\\u00b7IP 차단)', event_id: t.event_id, asset_id: t.asset_id,\n  src_ip: t.src_ip, username: t.username, count: t.count ?? null, group_key: t.username, cfg: CFG, times: T, expected };\nreturn [{ json: { proceed: true, mode: 'check', seat: 'C', group_key: t.username, ctx: X } }];\n"
     }
    },
    {
@@ -299,12 +299,76 @@
     }
    },
    {
+    "id": "352a6965-430b-5526-a4b4-9dc31b716a00",
+    "name": "조치2 입력 (계정 잠금)",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     3000,
+     -140
+    ],
+    "parameters": {
+     "jsCode": "if (($input.first().json.ctx?.results || []).some(s=>['failed','rejected'].includes(s.result))) throw new Error('PREVIOUS_ACTION_FAILED');\nconst record=$input.first().json;\nif (record.ok !== true || !record.ticket_id || !['open','responding','verified'].includes(record.status) || record.ctx?.new_round_required && record.ticket_id===record.ctx.existing_ticket) throw new Error('TICKET_RECORD_REQUIRED');\nif (record.ticket_current !== true) throw new Error('TICKET_CURRENT_REQUIRED');\nconst r = $input.first().json;\nconst x = r.ctx;\nconst ticket_id = r.ticket_id || x.ticket_id;\nreturn [{ json: { ctx: { ...x, ticket_id }, ticket_id, dry_run: x.cfg.dry_run, action: 'lock', username: x.username } }];\n"
+    }
+   },
+   {
+    "id": "f2fd977e-ee38-5e8e-b52e-f7ca31b5d8c6",
+    "name": "조치2 (계정 잠금)",
+    "type": "n8n-nodes-base.executeWorkflow",
+    "typeVersion": 1.2,
+    "position": [
+     3240,
+     -140
+    ],
+    "parameters": {
+     "source": "database",
+     "workflowId": {
+      "__rl": true,
+      "value": "haedamAccountLock01",
+      "mode": "id"
+     },
+     "options": {}
+    }
+   },
+   {
+    "id": "a23158f2-551d-5b52-b8a1-9404bdbc9293",
+    "name": "조치2 기록 입력",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     3480,
+     -140
+    ],
+    "parameters": {
+     "jsCode": "// 조치 결과를 티켓에 기록(stage applied). 중복 방지 키: {실행 ID}-applied-2\nconst r = $input.first().json;\nconst x = r.ctx;\nif (r.result === 'skipped') return [{ json: { ctx: x, mode: 'record', stage: 'detected', seat: x.seat, case_id: x.case_id, group_key: x.group_key,\n  asset_id: x.asset_id, src_ip: x.src_ip || null, username: x.username || null, event_ids: [x.event_id], idempotency_key: `${$execution.id}-skip-2` } }];\nconst res = { step: 2, result: r.result, detail: r.detail };\nreturn [{ json: { ctx: { ...x, results: [...(x.results || []), res] }, mode: 'record', stage: 'applied', seat: x.seat, case_id: x.case_id, group_key: x.group_key, title: x.title,\n  asset_id: x.asset_id, src_ip: x.src_ip || null, username: x.username || null, event_ids: [x.event_id], idempotency_key: `${$execution.id}-applied-2`,\n  action: { bot: '111', target: x.username, via: 'portal', action: 'lock', result: r.result,\n    applied_verified: r.result === 'dry_run' ? null : (r.applied_verified ?? null), effect_verified: null, effect_verified_at: null,\n    requested_at: r.requested_at, finished_at: r.finished_at, n8n_execution_id: String($execution.id), detail: r.detail } } }];\n"
+    }
+   },
+   {
+    "id": "31107a59-8bd3-5b5a-9fab-bd74aaa8a9ed",
+    "name": "조치2 기록 (haedam-10)",
+    "type": "n8n-nodes-base.executeWorkflow",
+    "typeVersion": 1.2,
+    "position": [
+     3720,
+     -140
+    ],
+    "parameters": {
+     "source": "database",
+     "workflowId": {
+      "__rl": true,
+      "value": "haedamResultLog01",
+      "mode": "id"
+     },
+     "options": {}
+    }
+   },
+   {
     "id": "9512b6c3-f9d1-5cb7-ad78-d86a40874738",
     "name": "알림 입력",
     "type": "n8n-nodes-base.code",
     "typeVersion": 2,
     "position": [
-     3000,
+     3960,
      -140
     ],
     "parameters": {
@@ -317,7 +381,7 @@
     "type": "n8n-nodes-base.executeWorkflow",
     "typeVersion": 1.2,
     "position": [
-     3240,
+     4200,
      -140
     ],
     "parameters": {
@@ -336,7 +400,7 @@
     "type": "n8n-nodes-base.code",
     "typeVersion": 2,
     "position": [
-     3480,
+     4440,
      -140
     ],
     "parameters": {
@@ -349,7 +413,7 @@
     "type": "n8n-nodes-base.respondToWebhook",
     "typeVersion": 1.1,
     "position": [
-     3720,
+     4680,
      -140
     ],
     "parameters": {
@@ -423,6 +487,51 @@
     "typeVersion": 2,
     "position": [
      2340,
+     -560
+    ],
+    "parameters": {
+     "jsCode": "\nconst validText = v => typeof v === 'string' && v.length > 0 && v.length <= 300 && !/[\\x00-\\x1f\\x7f]/.test(v);\nconst ticketId = v => typeof v === 'string' && /^T-\\d{8}-\\d{4}$/.test(v);\nconst states = ['open','responding','verified','restored','closed'];\nconst canon = a => a.via === 'pfsense' && a.action === 'fw_block' ? 'block' : a.action;\nconst same = (a,b) => a.bot === b.bot && a.via === b.via && canon(a) === canon(b) && a.target === b.target;\nconst refOK = (a, dry=false) => a && typeof a.bot === 'string' && /^(\\d{3}|manual)$/.test(a.bot) && ['portal','pfsense','wazuh-ar','manual'].includes(a.via) && typeof a.action === 'string' && /^[a-z][a-z_]{1,31}$/.test(a.action) && validText(a.target) && (a.result === undefined || ['applied','already_applied'].includes(a.result) || (dry && a.result === 'dry_run'));\nconst held = (ctx,code) => [{json:{ok:false,no_action:true,verdict:code,ctx}}];\nconst snapshotOK = j => j.ok === true && typeof j.exists === 'boolean' && Array.isArray(j.actions) && j.actions.every(a=>refOK(a,!!j.ctx?.cfg?.dry_run) && (['applied','already_applied'].includes(a.result) || (j.ctx?.cfg?.dry_run && a.result==='dry_run'))) && (j.exists ? ticketId(j.ticket_id) && states.includes(j.status) : j.ticket_id === null && j.status === null && j.actions.length === 0);\n\nconst j=$input.first().json,x=j.ctx,a=x?.record_ack;\nif(!snapshotOK(j) || !j.exists || !a || j.ticket_id!==a.ticket_id || !['open','responding','verified'].includes(j.status)) throw new Error('TICKET_CURRENT_REQUIRED');\nconst {record_ack,...ctx}=x;\nreturn [{json:{...a,ok:true,status:j.status,ticket_current:true,ctx}}];\n"
+    }
+   },
+   {
+    "id": "93aaae69-aaf4-501d-99c8-24ac0f62e5f9",
+    "name": "조치 전 티켓 조회 입력 2",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     2820,
+     -560
+    ],
+    "parameters": {
+     "jsCode": "\nconst validText = v => typeof v === 'string' && v.length > 0 && v.length <= 300 && !/[\\x00-\\x1f\\x7f]/.test(v);\nconst ticketId = v => typeof v === 'string' && /^T-\\d{8}-\\d{4}$/.test(v);\nconst states = ['open','responding','verified','restored','closed'];\nconst canon = a => a.via === 'pfsense' && a.action === 'fw_block' ? 'block' : a.action;\nconst same = (a,b) => a.bot === b.bot && a.via === b.via && canon(a) === canon(b) && a.target === b.target;\nconst refOK = (a, dry=false) => a && typeof a.bot === 'string' && /^(\\d{3}|manual)$/.test(a.bot) && ['portal','pfsense','wazuh-ar','manual'].includes(a.via) && typeof a.action === 'string' && /^[a-z][a-z_]{1,31}$/.test(a.action) && validText(a.target) && (a.result === undefined || ['applied','already_applied'].includes(a.result) || (dry && a.result === 'dry_run'));\nconst held = (ctx,code) => [{json:{ok:false,no_action:true,verdict:code,ctx}}];\nconst snapshotOK = j => j.ok === true && typeof j.exists === 'boolean' && Array.isArray(j.actions) && j.actions.every(a=>refOK(a,!!j.ctx?.cfg?.dry_run) && (['applied','already_applied'].includes(a.result) || (j.ctx?.cfg?.dry_run && a.result==='dry_run'))) && (j.exists ? ticketId(j.ticket_id) && states.includes(j.status) : j.ticket_id === null && j.status === null && j.actions.length === 0);\n\nconst r=$input.first().json,x=r.ctx;\nif(r.ok!==true || !ticketId(r.ticket_id) || !['open','responding','verified'].includes(r.status)) throw new Error('TICKET_RECORD_REQUIRED');\nconst seat=x?.seat||x?.cfg?.seat,group=x?.group_key||x?.src_ip;\nif(!['A','B','C','D'].includes(seat) || !validText(group)) throw new Error('TICKET_CURRENT_REQUIRED');\nreturn [{json:{mode:'check',seat,group_key:group,ctx:{...x,record_ack:{ticket_id:r.ticket_id,created:r.created,duplicate:r.duplicate,status:r.status}}}}];\n"
+    }
+   },
+   {
+    "id": "cb0c1e8e-63fd-56bf-b052-d15ebcdb866e",
+    "name": "조치 전 티켓 조회 2",
+    "type": "n8n-nodes-base.executeWorkflow",
+    "typeVersion": 1.2,
+    "position": [
+     3060,
+     -560
+    ],
+    "parameters": {
+     "source": "database",
+     "workflowId": {
+      "__rl": true,
+      "value": "haedamResultLog01",
+      "mode": "id"
+     },
+     "options": {}
+    }
+   },
+   {
+    "id": "92844c0f-885a-5b72-bbc6-9448c72e5522",
+    "name": "조치 전 티켓 대조 2",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     3300,
      -560
     ],
     "parameters": {
@@ -599,6 +708,50 @@
     "main": [
      [
       {
+       "node": "조치 전 티켓 조회 입력 2",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "조치2 입력 (계정 잠금)": {
+    "main": [
+     [
+      {
+       "node": "조치2 (계정 잠금)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "조치2 (계정 잠금)": {
+    "main": [
+     [
+      {
+       "node": "조치2 기록 입력",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "조치2 기록 입력": {
+    "main": [
+     [
+      {
+       "node": "조치2 기록 (haedam-10)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "조치2 기록 (haedam-10)": {
+    "main": [
+     [
+      {
        "node": "알림 입력",
        "type": "main",
        "index": 0
@@ -677,6 +830,39 @@
      [
       {
        "node": "조치1 입력 (포털 IP 차단)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "조치 전 티켓 조회 입력 2": {
+    "main": [
+     [
+      {
+       "node": "조치 전 티켓 조회 2",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "조치 전 티켓 조회 2": {
+    "main": [
+     [
+      {
+       "node": "조치 전 티켓 대조 2",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "조치 전 티켓 대조 2": {
+    "main": [
+     [
+      {
+       "node": "조치2 입력 (계정 잠금)",
        "type": "main",
        "index": 0
       }

@@ -1,6 +1,6 @@
 {
-  "title": "n8n haedam-h2 (H2 foreign petition access)",
-  "description": "H2 repeated foreign-petition detail denial to n8n haedam-36.",
+  "title": "n8n haedam-h2 (H2 → haedam-36)",
+  "description": "H2 타인 민원 엿보기 → n8n haedam-36(계정 잠금·IP 차단·티켓). 작성: 반소람",
   "config": {
     "type": "http-notification-v2",
     "url": "http://host.docker.internal:5678/webhook/haedam-h2",
