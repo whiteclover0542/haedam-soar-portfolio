@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab.run_ticket import (H1_POSTS, NORMAL, ROOT, SEAT, SRC, TICKETS, env, get, http_code, portal_login,  # noqa: E402
-                            portal_posting, portal_reset, sh, tickets_for)
+                            portal_reset, sh, tickets_for)
 from lab.h2.input import run_h2  # noqa: E402
 from lab.h3 import live as h3  # noqa: E402
 
@@ -26,6 +26,7 @@ TOKEN = secrets.token_urlsafe(16)
 CASES = ["H1", "H2", "H3", "S1", "S4", "S7", "S8", "S10", "S12"]
 PENDING_CASES = {"S7", "S12"}  # Graylog 정의·n8n 반입 전(docs/PROGRESS.md)
 SRC = {**SRC, "H3": "담당자 계정(포털 내부)"}
+SEAT = {**SEAT, "H3": "C"}   # haedam-50 해제 웹훅에 넘길 자리
 USERS = {}    # S1·H1·H2·H3 이번 실행에서 만든 계정 {"user", "pw"} (이름·비밀번호는 메모리에만)
 RUNS = {}     # case → {"at": 공격 시각, "effect": 마지막 효과, "released": 해제 결과}
 LOCK = threading.Lock()  # 공격 버튼을 동시에 두 번 누르지 않게
@@ -223,19 +224,21 @@ def release(case):
                 {"step": "n8n haedam-50: 티켓 원복 기록", "cmd": "POST /webhook/haedam-release", "result": rel.get("verdict")},
                 {"step": "계정 주인이 새 비밀번호로 로그인", "cmd": "portal_login.py login", "result": after},
                 {"step": "공격자가 알던 옛 비밀번호(401이어야 함)", "cmd": "portal_login.py login", "result": old}]
-    if case == "H3":  # 관리자가 확인한 뒤 담당자 계정 잠금을 푼다
+    if case == "H3":  # 관리자가 확인한 뒤 담당자 계정 잠금을 풀고, haedam-50이 풀린 것을 확인해 티켓을 restored로 닫는다
         after = str(h3.unlock(USERS["H3"]))
+        rel = release_webhook(case, t["case_id"])
         if case in RUNS:
-            RUNS[case]["released"] = {"steps": ["관리자 잠금 해제 200"], "attacker": after}
+            RUNS[case]["released"] = {"steps": ["관리자 잠금 해제 200", f"티켓 {rel.get('verdict')}"], "attacker": after}
         return [{"step": "관리자: 담당자 계정 잠금 해제(오탐 확인)", "cmd": "POST /api/v1/admin/users/<id>/unlock", "result": "200"},
+                {"step": "n8n haedam-50: 잠금 해제 확인 → 티켓 원복·Discord", "cmd": "POST /webhook/haedam-release", "result": rel.get("verdict")},
                 {"step": "해제 후 담당자 로그인", "cmd": "", "result": after}]
-    if case == "H1":  # 담당자가 포털 대응 API로 작성 제한을 푼다(haedam-50은 IP 차단만 푼다)
+    if case == "H1":  # haedam-50 posting 분기가 작성 제한을 풀고 티켓 restored·Discord 원복 카드까지 남긴다
         u = USERS["H1"]
-        code = portal_posting(env(), u["user"], False)
+        rel = release_webhook(case, t["case_id"])
         after = str(portal_login("haedam-attacker", SRC[case], "post", u["user"], "1", pw=u["pw"])["statuses"][0])
         if case in RUNS:
-            RUNS[case]["released"] = {"steps": [f"포털 작성 제한 해제 {code}"], "attacker": after}
-        return [{"step": "담당자: 포털 대응 API로 작성 제한 해제", "cmd": "POST /api/v1/response/accounts/posting", "result": code},
+            RUNS[case]["released"] = {"steps": [f"작성 제한 해제 {rel.get('verdict')}"], "attacker": after}
+        return [{"step": "n8n haedam-50: 작성 제한 해제 → 티켓 원복·Discord", "cmd": "POST /webhook/haedam-release", "result": rel.get("verdict")},
                 {"step": "해제 후 공격 계정 민원 1건", "cmd": "", "result": after}]
     rel = release_webhook(case, t["case_id"])
     pre = []
@@ -334,8 +337,8 @@ def timeline(case):
                   else "차단이 적용되면 자동으로 확인합니다.")},
         {"name": "⑥ 해제 (사람이 확인 후)", "state": st(bool(rel) and rel["attacker"] == ok, wait=not rel), "link": "http://127.0.0.1:8089",
          "text": (f"{' → '.join(rel['steps']) or '단계 없음'} · 공격자 다시 {rel['attacker']}." if rel
-                  else "효과를 확인했으면 [해제]를 누릅니다. " + ("담당자가 포털 대응 API로 작성 제한을 풉니다." if case == "H1"
-                                                         else "관리자가 담당자 계정 잠금을 풉니다." if case == "H3"
+                  else "효과를 확인했으면 [해제]를 누릅니다. " + ("해제 웹훅이 작성 제한을 풀고 티켓을 닫습니다." if case == "H1"
+                                                         else "관리자가 담당자 계정 잠금을 풀고, 해제 웹훅이 티켓을 닫습니다." if case == "H3"
                                                          else "담당자가 비밀번호를 재설정해 잠금을 풉니다." if case == "S4"
                                                          else "IP 차단을 풀고, 잠긴 계정은 비밀번호 재설정 뒤 풉니다." if case == "H2"
                                                          else "pfSense를 먼저 풀고 포털을 풉니다."))},

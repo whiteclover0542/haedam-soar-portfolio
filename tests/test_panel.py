@@ -76,3 +76,19 @@ def test_h2_release_resets_the_locked_account_before_releasing_again(monkeypatch
 
     assert resets == [7] and panel.USERS["H2"]["pw"] != "old"
     assert [x["result"] for x in log] == [["111:portal:lock:attacker"], "200", ["포털 released"], "200", [403]]
+
+
+def test_h1_and_h3_release_close_the_ticket_through_the_release_webhook(monkeypatch):
+    # Without haedam-50 the block lifts but the ticket stays responding and no restore card goes out.
+    panel.USERS["H1"] = {"user": "zz_a_h1_x", "pw": "pw"}
+    panel.USERS["H3"] = {"user": "zz_h3_staff_x"}
+    order = []
+    monkeypatch.setattr(panel, "latest_ticket", lambda case: {"case_id": case})
+    monkeypatch.setattr(panel, "release_webhook", lambda case, case_id: order.append(("webhook", case)) or {"verdict": "released"})
+    monkeypatch.setattr(panel.h3, "unlock", lambda run: order.append(("unlock", "H3")) or 200)
+    monkeypatch.setattr(panel, "portal_login", lambda *a, pw=None: {"statuses": [201]})
+
+    assert panel.release("H1")[0]["result"] == "released"
+    assert panel.release("H3")[1]["result"] == "released"
+    assert order == [("webhook", "H1"), ("unlock", "H3"), ("webhook", "H3")]   # H3: unlock first, or the webhook holds
+    assert panel.SEAT["H3"] == "C"
