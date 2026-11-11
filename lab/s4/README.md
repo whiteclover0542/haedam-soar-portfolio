@@ -1,9 +1,9 @@
-# S4 실패 뒤 성공 계정 잠금 — 준비 상태
+# S4 오프라인 입력 계획
 
-실행 전 계획만 준비했다. 로그인 요청이나 계정 잠금은 하지 않는다.
+`input.py`는 S4 상관 규칙에 필요한 입력(동일 계정·출발지의 실패 5회 뒤 성공 1회)을 JSON으로만 생성한다. 포털 요청, Docker 실행, n8n/Graylog 반입을 전혀 하지 않는다.
 
 ```powershell
-python lab/pending_case_plan.py S4
+python lab/s4/input.py --username zz_s4_test --src-ip 203.0.113.22
 ```
 
-전용 합성 계정과 출발지 IP, Graylog 정의·haedam-31·haedam-13 반입이 모두 확인된 뒤에만 제어판 연결을 검토한다.
+실측 전에는 `lab/s1s4/graylog/check.py`와 `tests/test_s4_offline.py`를 통과시킨 뒤, H2 종료 및 반입 승인 후에만 별도 절차로 진행한다.
