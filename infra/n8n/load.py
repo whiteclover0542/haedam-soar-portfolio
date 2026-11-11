@@ -4,6 +4,7 @@ python infra/n8n/load.py
 Reads .env and the dedicated pfSense key (.local/haedam-pf). Secrets go through docker exec stdin into a
 temp file that is deleted right after import; nothing is written on the host.
 """
+import argparse
 import json
 import subprocess
 import sys
@@ -25,6 +26,10 @@ SCOPE = {
     "haedamRelease01": "점검·해제", "haedamTicketCheck01": "점검·해제", "haedamPfStatusCheck01": "점검·해제",
 }
 NOT_PUBLISHED = {"haedamPfStatusCheck01"}  # manual trigger only; run with `n8n execute`
+S7_SCOPE = {wid: SCOPE[wid] for wid in (
+    "haedamS7Main01", "haedamResultLog01", "haedamDiscord01",
+    "haedamWazuhRestore01", "haedamWazuhToken01",
+)}
 
 
 def env_file():
@@ -43,23 +48,29 @@ def n8n_import(kind, payload):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--s7", action="store_true",
+                    help="import only S7 and its dependencies; does not require the pfSense SSH key")
+    args = ap.parse_args()
+    scope = S7_SCOPE if args.s7 else SCOPE
     env = env_file()
-    key_file = ROOT / env.get("PF_SSH_PRIVATE_KEY_FILE", ".local/haedam-pf")
-    env["PF_SSH_PRIVATE_KEY"] = key_file.read_text("utf-8")
-    creds = build_credentials(env)
+    if not args.s7:
+        key_file = ROOT / env.get("PF_SSH_PRIVATE_KEY_FILE", ".local/haedam-pf")
+        env["PF_SSH_PRIVATE_KEY"] = key_file.read_text("utf-8")
+    creds = build_credentials(env, include_pfsense=not args.s7)
     workflows = []
     for p in sorted((ROOT / "infra/n8n/workflows").glob("*.json")):
         w = json.loads(p.read_text("utf-8"))
         w = w[0] if isinstance(w, list) else w
-        if w.get("id") in SCOPE:
-            workflows.append({**attach_credentials(w, creds), "tags": [{"name": SCOPE[w["id"]]}]})
-    missing = SCOPE.keys() - {w["id"] for w in workflows}
+        if w.get("id") in scope:
+            workflows.append({**attach_credentials(w, creds), "tags": [{"name": scope[w["id"]]}]})
+    missing = scope.keys() - {w["id"] for w in workflows}
     if missing:
         raise SystemExit(f"workflow files not found for: {sorted(missing)}")
     n8n_import("credentials", creds)
     for w in workflows:  # one at a time: a batch creates each new tag once per workflow and hits UNIQUE(name)
         n8n_import("workflow", [w])
-    publish = [wid for wid in SCOPE if wid not in NOT_PUBLISHED]
+    publish = [wid for wid in scope if wid not in NOT_PUBLISHED]
     for wid in publish:
         subprocess.run(["docker", "exec", CONTAINER, "n8n", "publish:workflow", f"--id={wid}"], check=True,
                        capture_output=True)

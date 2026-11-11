@@ -1,7 +1,10 @@
 #!/bin/sh
 set -eu
-# Replies to citizens/attackers go back through pfSense, not Docker's gateway, so source IPs stay real.
-ip route replace 203.0.113.0/24 via 10.250.0.1
+# Replies to citizens/attackers go back through pfSense, not Docker's gateway,
+# so source IPs stay real. A light local demo intentionally omits pfSense.
+if [ -n "${PORTAL_WAN_GATEWAY:-}" ]; then
+  ip route replace 203.0.113.0/24 via "$PORTAL_WAN_GATEWAY"
+fi
 
 python - <<'EOF'
 import os, time, pymysql

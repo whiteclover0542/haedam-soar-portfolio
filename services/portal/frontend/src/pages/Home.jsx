@@ -153,6 +153,20 @@ export default function Home() {
           <span className="visual-caption">시민과 함께 만들어가는 내일</span>
         </div>
       </section>
+      <section className="service-promise" aria-label="민원 서비스 안내">
+        <div>
+          <span className="service-promise-icon"><Icon name="shield" size={21} /></span>
+          <div><strong>필요한 정보만 받습니다</strong><p>실습용 서비스이므로 실제 주민번호나 연락처는 입력하지 마세요.</p></div>
+        </div>
+        <div>
+          <span className="service-promise-icon"><Icon name="clock" size={21} /></span>
+          <div><strong>처리 상태를 바로 확인합니다</strong><p>접수부터 답변까지의 진행 상황을 내 민원에서 이어서 볼 수 있습니다.</p></div>
+        </div>
+        <div>
+          <span className="service-promise-icon"><Icon name="help" size={21} /></span>
+          <div><strong>처음이라도 안내를 제공합니다</strong><p>생활 불편의 종류를 고르면 필요한 내용을 단계별로 알려드립니다.</p></div>
+        </div>
+      </section>
       <div className="quick-links" aria-label="주요 서비스 바로가기">
         {shortcuts.map((item) => (
           <Link to={item.to} key={item.to}>

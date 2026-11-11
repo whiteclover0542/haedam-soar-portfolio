@@ -6,6 +6,7 @@ python lab/panel.py        → http://127.0.0.1:8099 (브라우저가 자동으�
 """
 import json
 import secrets
+import shlex
 import sys
 import threading
 import urllib.parse
@@ -20,12 +21,15 @@ from lab.run_ticket import (H1_POSTS, NORMAL, ROOT, S12_POOL, SEAT, SRC, TICKETS
                             portal_reset, sh, tickets_for)
 from lab.h2.input import run_h2  # noqa: E402
 from lab.h3 import live as h3  # noqa: E402
+from lab.run_ticket import get  # noqa: E402
+from lab.s7 import live as s7  # noqa: E402
 
 PORT = 8099
 TOKEN = secrets.token_urlsafe(16)
 CASES = ["H1", "H2", "H3", "S1", "S4", "S7", "S8", "S10", "S12"]
-PENDING_CASES = {"S7"}  # Graylog 정의·n8n 반입 전(docs/PROGRESS.md)
-SRC = {**SRC, "H3": "담당자 계정(포털 내부)"}
+PENDING_CASES = set()
+SRC = {**SRC, "H3": "담당자 계정(포털 내부)", "S7": "haedam-portal:/app/dist"}
+S7_FILE = "favicon.svg"  # 화면에 보이지 않는 기준 파일. 같은 파일을 다시 변조하면 열린 티켓에 복구가 다시 기록된다
 SEAT = {**SEAT, "H3": "C"}   # haedam-50 해제 웹훅에 넘길 자리
 USERS = {}    # S1·H1·H2·H3 이번 실행에서 만든 계정 {"user", "pw"} (이름·비밀번호는 메모리에만)
 RUNS = {}     # case → {"at": 공격 시각, "effect": 마지막 효과, "released": 해제 결과}
@@ -36,7 +40,92 @@ def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def s7_wazuh_alert(file_key):
+    """Newest FIM alert for this panel-created safe file, or None while Wazuh is still processing it."""
+    cmd = "grep -aF -- " + shlex.quote(file_key) + " /var/ossec/logs/alerts/alerts.json | tail -1"
+    raw = sh("docker", "exec", "haedam-wazuh-manager", "sh", "-c", cmd, check=False)
+    try:
+        return json.loads(raw) if raw else None
+    except json.JSONDecodeError:
+        return None
+
+
+def s7_alert_after(file_key, since):
+    """Newest Wazuh FIM alert for this file raised after `since`, else None."""
+    alert = s7_wazuh_alert(file_key)
+    if not alert:
+        return None
+    at = datetime.strptime(alert["timestamp"], "%Y-%m-%dT%H:%M:%S.%f%z")
+    return alert if at >= since.replace(microsecond=0) else None
+
+
+def s7_graylog_count(file_key, since):
+    pw = env()["GRAYLOG_ADMIN_PASSWORD"]
+    q = f'file_key:"{file_key}"'
+    url = ("http://127.0.0.1:9000/api/search/universal/absolute?limit=1&query=" + urllib.parse.quote(q)
+           + "&from=" + since.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+           + "&to=" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+    req = urllib.request.Request(url, headers={"Accept": "application/json", "Authorization":
+                                               "Basic " + __import__("base64").b64encode(f"admin:{pw}".encode()).decode()})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read())["total_results"]
+
+
+def s7_restore_action(run):
+    """(ticket, action) for the Wazuh AR restore n8n recorded after this attack. haedam-33 reuses an open ticket
+    for the same file, so match on the action time, not on a new ticket."""
+    for tid in tickets_for(f"haedam-portal:{run['file_key']}"):
+        t = get(f"{TICKETS}/{tid}")["ticket"]
+        for a in t.get("actions", []):
+            done = a.get("finished_at")
+            if a["via"] == "wazuh-ar" and a["result"] in ("applied", "already_applied") and done \
+                    and datetime.fromisoformat(done.replace("Z", "+00:00")) >= run["at"]:
+                return t, a
+    return None, None
+
+
+def s7_attack():
+    """Tamper one baseline file (an appended comment: harmless, but the sha256 changes). Wazuh AR restores it."""
+    if s7.verify() != "ok":
+        return [{"step": "기준 해시 검증", "cmd": "s7_restore.py verify", "result": "기준본과 다름 — 먼저 복구하세요"}]
+    file_key, stamp = S7_FILE, datetime.now().strftime("%Y%m%d%H%M%S")
+    started = datetime.now(timezone.utc)
+    sh("docker", "exec", "-e", f"T=\n<!-- s7 panel {stamp} -->\n", "haedam-portal", "sh", "-c",
+       f'printf %s "$T" >> /app/dist/{file_key}')
+    RUNS["S7"] = {"at": started, "file_key": file_key, "effect": None, "released": None}
+    return [{"step": "기준 파일 변조(주석 한 줄 추가)", "cmd": f"docker exec haedam-portal sh -c 'printf ... >> /app/dist/{file_key}'",
+             "result": file_key},
+            {"step": "Wazuh FIM → Graylog → n8n → Wazuh AR 대기", "cmd": "보통 30~60초", "result": "대기 중"}]
+
+
+def s7_effect():
+    run = RUNS.get("S7")
+    if not run:
+        return [{"step": "이번 실행에서 [공격]을 먼저 누르세요", "cmd": "", "result": "-"}]
+    ticket, action = s7_restore_action(run)
+    status, sha = s7.served_sha(run["file_key"])
+    same = sha == s7.manifest()[run["file_key"]]
+    home = s7.served_sha("")[0]
+    if action:
+        run["effect"] = {"restored": same, "home": home}
+    return [{"step": "n8n 자동 복구(Wazuh AR)", "cmd": "티켓 actions", "result":
+             f"{ticket['ticket_id']} · {action['action']} {action['result']}" if action else "아직 없음 — 잠시 뒤 다시 확인"},
+            {"step": "브라우저가 받는 파일", "cmd": f"GET /{run['file_key']} sha256", "result": f"{status} · {'기준 해시 일치' if same else '변조된 내용'}"},
+            {"step": "포털 첫 화면", "cmd": "GET /", "result": str(home)}]
+
+
+def s7_release():
+    run = RUNS.get("S7")
+    if not run:
+        return [{"step": "이번 실행에서 [공격]을 먼저 누르세요", "cmd": "", "result": "-"}]
+    result = s7.verify()
+    run["released"] = {"verified": result == "ok"}
+    return [{"step": "기준 해시 전체 검증(복구는 이미 자동으로 끝남)", "cmd": "s7_restore.py verify", "result": result}]
+
+
 def attack(case):
+    if case == "S7":
+        return s7_attack()
     # 입력을 보내기 전 시각: 입력 중에 들어온 로그도 ②에서 세야 한다(끝난 뒤 시각이면 ②가 0건으로 남음)
     src, log, started = SRC[case], [], datetime.now(timezone.utc)
     ensure_src(src)   # 케이스마다 출발지가 따로라 공격 컨테이너에 그 주소를 붙인다(H3는 계정 기준이라 건너뜀)
@@ -170,6 +259,8 @@ def s4_effect():
 
 
 def effect(case):
+    if case == "S7":
+        return s7_effect()
     src = atk_src(case)
     if case == "S4":
         out = s4_effect()
@@ -231,6 +322,8 @@ def latest_ticket(case):
 
 
 def release(case):
+    if case == "S7":
+        return s7_release()
     t = latest_ticket(case)
     if not t:
         return [{"step": "해제할 티켓이 없음", "cmd": "", "result": "-"}]
@@ -291,7 +384,8 @@ def release(case):
 def release_webhook(case, case_id):
     body = json.dumps({"seat": SEAT[case], "case_id": case_id, "group_key": group_key(case), "approver": "실습 제어판",
                        "dry_run": False, "reason": "실습 원복"}).encode()
-    req = urllib.request.Request("http://127.0.0.1:5678/webhook/haedam-release", data=body, method="POST",
+    n8n_port = env().get("N8N_HOST_PORT", "5678")
+    req = urllib.request.Request(f"http://127.0.0.1:{n8n_port}/webhook/haedam-release", data=body, method="POST",
                                  headers={"Content-Type": "application/json", "X-Haedam-Key": env()["N8N_WEBHOOK_KEY"]})
     with urllib.request.urlopen(req, timeout=120) as r:
         rel = json.loads(r.read())
@@ -311,6 +405,9 @@ EXPECT["S12"] = ("403", "요청 수 초과 출발지 차단, 다른 시민은 �
 
 
 def graylog_count(case, since):
+    if case == "S7":
+        run = RUNS.get("S7")
+        return s7_graylog_count(run["file_key"], since) if run else 0
     q = f"username:{group_key(case)}" if case in ("S1", "S4", "H1", "H2", "H3") else f"src_ip:{group_key(case)}"
     pw = env()["GRAYLOG_ADMIN_PASSWORD"]
     url = ("http://127.0.0.1:9000/api/search/universal/absolute?limit=1&query=" + urllib.parse.quote(q)
@@ -321,7 +418,47 @@ def graylog_count(case, since):
         return json.loads(r.read())["total_results"]
 
 
+def s7_timeline():
+    names = ("① 기준 파일 변조", "② Wazuh FIM 경보", "③ Graylog 전달·분류",
+             "④ 탐지·자동 복구 (n8n → Wazuh AR)", "⑤ 효과: 원본 해시로 복구", "⑥ 기준 해시 전체 검증")
+    run = RUNS.get("S7")
+    if not run:
+        return {"steps": [{"name": name, "state": "idle", "text": "[공격]을 누르면 시작합니다."} for name in names],
+                "elapsed": None, "ticket": None}
+    elapsed = int((datetime.now(timezone.utc) - run["at"]).total_seconds())
+    alert = s7_alert_after(run["file_key"], run["at"])
+    logs = s7_graylog_count(run["file_key"], run["at"])
+    ticket, action = s7_restore_action(run)
+    if action and run["effect"] is None:
+        s7_effect()  # 복구가 기록되면 효과를 한 번 자동으로 본다
+    effect, released = run.get("effect"), run.get("released")
+    state = lambda yes, wait=True: "done" if yes else ("wait" if wait else "bad")
+    discord = "" if env().get("DISCORD_WEBHOOK_URL") else " (Discord 웹훅 미설정: 알림 단계만 건너뜀)"
+    steps = [
+        {"name": names[0], "state": "done", "text": f"/app/dist/{run['file_key']} 끝에 주석 한 줄을 붙였습니다(해시 변경)."},
+        {"name": names[1], "state": state(bool(alert)), "link": "https://127.0.0.1:5601",
+         "text": f"규칙 {alert['rule']['id']} · {alert['syscheck']['event']}" if alert else "Wazuh가 파일 변경을 수집하는 중입니다."},
+        {"name": names[2], "state": state(logs > 0), "link": "http://127.0.0.1:9000/search",
+         "text": f"file_key 기준 Graylog 메시지 {logs}건" if logs else "Graylog UDP 입력과 S7 파이프라인을 기다립니다."},
+        {"name": names[3], "state": state(bool(action), wait=elapsed < 240),
+         "link": f"http://127.0.0.1:{env().get('N8N_HOST_PORT', '5678')}/home/executions",
+         "text": (f"티켓 {ticket['ticket_id']} · wazuh-ar {action['action']} {action['result']}{discord}" if action
+                  else f"Graylog 1분 평가 → n8n haedam-33 → Wazuh AR. 공격 뒤 {elapsed}초 경과(보통 30~60초).")},
+        {"name": names[4], "state": state(bool(effect) and effect["restored"] and effect["home"] == 200, wait=not effect),
+         "text": (f"브라우저가 받는 {run['file_key']}가 기준 해시와 {'일치' if effect['restored'] else '불일치'}, 포털 첫 화면 {effect['home']}."
+                  if effect else "복구가 기록되면 자동으로 확인합니다.")},
+        {"name": names[5], "state": state(bool(released) and released["verified"], wait=not released),
+         "text": ("웹 루트 4개 파일 모두 기준 해시와 일치합니다." if released and released["verified"]
+                  else "기준본과 다른 파일이 남았습니다." if released
+                  else "복구를 확인했으면 [해제]로 전체 파일을 다시 검증합니다(S7은 풀 차단이 없음).")},
+    ]
+    return {"steps": steps, "elapsed": elapsed,
+            "ticket": ticket and {"ticket_id": ticket["ticket_id"], "status": ticket["status"], "mttd_seconds": None}}
+
+
 def timeline(case):
+    if case == "S7":
+        return s7_timeline()
     run = RUNS.get(case)
     if not run:
         return {"steps": [], "elapsed": None}
@@ -351,7 +488,7 @@ def timeline(case):
         {"name": "③ 탐지 (Graylog 경보)", "state": st(bool(t)), "link": "http://127.0.0.1:9000/alerts",
          "text": (f"경보 → n8n 호출 → 티켓 {t['ticket_id']} 생성." if t else
                   f"Graylog가 1분마다 조건을 확인합니다. 공격 뒤 {elapsed}초 경과(보통 30~70초).")},
-        {"name": "④ 자동 대응 (n8n)", "state": st(done, wait=not (t and elapsed > 240)), "link": "http://127.0.0.1:5678/home/executions",
+        {"name": "④ 자동 대응 (n8n)", "state": st(done, wait=not (t and elapsed > 240)), "link": f"http://127.0.0.1:{env().get('N8N_HOST_PORT', '5678')}/home/executions",
          "text": ("차단 적용: " + ", ".join(f"{a['via']} {a['result']}" for a in blocks)) if blocks else
                  ("조치를 기다리는 중." if t else "탐지 뒤에 시작됩니다.")
                  + (" (S10은 포털과 pfSense 둘 다)" if case == "S10" else "")},
@@ -459,8 +596,8 @@ li b{display:block}li span{color:var(--mute)}li a{color:var(--blue);font-size:13
 details{margin:0 24px 32px}summary{cursor:pointer;color:var(--mute)}.entry{border-top:1px solid var(--line);padding:6px 0;font-size:14px}.entry code{color:var(--mute);font-size:12px;word-break:break-all}
 </style></head><body>
 <header><h1>해담 SOAR 실습 제어판</h1><p>티켓을 고르고 [공격]을 누른 뒤, 아래 단계가 차례로 초록색이 되는 것을 지켜보세요.</p></header>
-<nav><a href="http://127.0.0.1:8080" target="_blank">민원 포털</a><a href="http://127.0.0.1:8089" target="_blank">티켓 대시보드</a>
-<a href="https://127.0.0.1:8443" target="_blank">pfSense</a><a href="http://127.0.0.1:9000" target="_blank">Graylog</a><a href="http://127.0.0.1:5678" target="_blank">n8n</a></nav>
+<nav><a href="http://127.0.0.1:9000" target="_blank">Graylog</a><a href="https://127.0.0.1:5601" target="_blank">Wazuh</a><a href="http://127.0.0.1:{env().get('N8N_HOST_PORT', '5678')}" target="_blank">n8n</a>
+<a href="http://127.0.0.1:8089" target="_blank">티켓 대시보드</a><a href="https://127.0.0.1:8443" target="_blank">pfSense</a><a href="http://127.0.0.1:8080" target="_blank">민원 포털</a></nav>
 <div class="tabs" id="tabs"></div><section class="panel" id="panel"></section>
 <details><summary>실행한 명령 보기</summary><div id="entries"></div></details>
 <script>
@@ -471,13 +608,13 @@ S1:["S1 · 로그인 무차별 대입","정상 시민이 계정을 만들고, �
 const CASE_ORDER=["H1","H2","H3","S1","S4","S7","S8","S10","S12"];
 Object.assign(INFO,{
  H1:["H1 · 민원 도배","공격자가 계정을 만들어 민원 8건을 연달아 등록합니다. 그 계정의 민원 작성만 막고(429), 로그인·조회와 다른 시민의 작성은 그대로 둡니다."],H2:["H2 · 타인 민원 엿보기","새 공격자 계정이 다른 시민의 민원 상세를 세 번 요청해 403을 만듭니다. Graylog와 n8n이 탐지한 뒤 공격 출발지만 차단하고, 해제 후에도 타인 민원은 계속 403입니다."],H3:["H3 · 민원 처리 결과 조작","새 담당자 계정이 민원 3건을 연달아 처리 중으로 바꿉니다. Graylog가 같은 담당자의 변경 3건을 잡으면 n8n이 그 계정을 잠그고, 바뀐 민원을 모두 변경 전 스냅샷으로 되돌립니다. 신청자는 계속 조회할 수 있습니다."],
- S4:["S4 · 실패 뒤 성공(계정 탈취)","비밀번호를 아는 공격자가 틀린 비밀번호를 5번 넣은 뒤 맞는 비밀번호로 로그인합니다. Graylog가 같은 계정·출발지의 실패와 성공을 묶으면 n8n이 그 계정을 잠그고 세션을 회수합니다. 계정 주인은 비밀번호 재설정 뒤 새 비밀번호로 들어옵니다."],S7:["S7 · 연결 대기","실습 도구 연결 전입니다."],S12:["S12 · 요청 폭주","한 출발지가 /api/v1/health로 요청을 몰아 보냅니다. Graylog가 60초 창에서 그 출발지의 요청 수가 기준(N=60)을 넘으면 n8n이 그 출발지만 포털에서 차단합니다. 다른 시민은 그대로 쓰고, 사람이 확인한 뒤 차단을 풉니다."]
+ S4:["S4 · 실패 뒤 성공(계정 탈취)","비밀번호를 아는 공격자가 틀린 비밀번호를 5번 넣은 뒤 맞는 비밀번호로 로그인합니다. Graylog가 같은 계정·출발지의 실패와 성공을 묶으면 n8n이 그 계정을 잠그고 세션을 회수합니다. 계정 주인은 비밀번호 재설정 뒤 새 비밀번호로 들어옵니다."],S7:["S7 · 홈페이지 파일 변조","[공격]은 기준 파일(favicon.svg) 끝에 주석 한 줄을 붙여 해시를 바꿉니다. Wazuh FIM이 탐지하고 Graylog가 기준 해시 표에 없는 변경만 골라 n8n에 넘기면, n8n이 티켓을 만들고 Wazuh Active Response로 기준본을 되돌립니다. [해제]는 웹 루트 전체를 기준 해시로 다시 검증합니다."],S12:["S12 · 요청 폭주","한 출발지가 /api/v1/health로 요청을 몰아 보냅니다. Graylog가 60초 창에서 그 출발지의 요청 수가 기준(N=60)을 넘으면 n8n이 그 출발지만 포털에서 차단합니다. 다른 시민은 그대로 쓰고, 사람이 확인한 뒤 차단을 풉니다."]
 });
 let cur="H1",last={};
 function esc(s){return String(s??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
 function tabs(){document.getElementById("tabs").innerHTML=CASE_ORDER.map(c=>`<button class="${c===cur?'on':''}" onclick="cur='${c}';tabs();draw()">${c}</button>`).join("")}
 function draw(){const d=last[cur]||{},steps=d.steps||[];
- if(d.pending){const waiting=steps[0]||{},guide="";document.getElementById("panel").innerHTML=`<div class="top"><div><h2>${esc(INFO[cur][0])}</h2><p>${esc(waiting.text||"실습 도구 연결 전입니다.")}</p>${guide}</div></div><div class="hint">연결이 완료되면 공격·효과 확인·해제 버튼이 표시됩니다.</div>`;return;}
+ if(d.pending){const waiting=steps[0]||{},guide=cur==="S7"?"S7은 전용 안내의 검사 파일 추가 → FIM·Graylog 확인 → 로컬 격리·검증 순서로 진행합니다. Runner가 준비되기 전에는 자동 대응 버튼을 열지 않습니다.":"연결이 완료되면 공격·효과 확인·해제 버튼이 표시됩니다.";document.getElementById("panel").innerHTML=`<div class="top"><div><h2>${esc(INFO[cur][0])}</h2><p>${esc(waiting.text||"실습 도구 연결 전입니다.")}</p></div></div><div class="hint">${esc(guide)}</div>`;return;}
  const list=steps.length?steps:["① 공격 보냄","② Graylog에 로그 도착","③ 탐지 (Graylog 경보)","④ 자동 대응 (n8n)","⑤ 효과","⑥ 해제 (사람이 확인 후)"].map(n=>({name:n,state:"idle",text:"[공격]을 누르면 시작합니다."}));
  const icon={done:"✓",wait:"…",bad:"!",idle:""};
  const next=!steps.length?"[공격]을 눌러 시작하세요.":steps.find(s=>s.state==="bad")?"빨간 단계를 확인하세요. 오른쪽 링크의 화면에서 원인을 볼 수 있습니다.":

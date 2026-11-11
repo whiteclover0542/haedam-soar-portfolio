@@ -9,7 +9,7 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(panel)
 
 
-def test_state_orders_connected_and_unconnected_cases_without_running_unconnected_cases(monkeypatch):
+def test_state_orders_connected_cases_including_s7(monkeypatch):
     monkeypatch.setattr(panel, "timeline", lambda case: {"steps": [], "elapsed": None})
 
     current = panel.state()
@@ -18,9 +18,37 @@ def test_state_orders_connected_and_unconnected_cases_without_running_unconnecte
     assert "pending" not in current["H3"] and panel.EXPECT["H3"][0] == "401"
     assert "pending" not in current["S4"] and panel.EXPECT["S4"][0] == "401"
     assert "pending" not in current["S12"] and panel.EXPECT["S12"][0] == "403"
-    for case in ("S7",):
-        assert current[case]["pending"] is True
-        assert current[case]["steps"][0]["state"] == "wait"
+    s7 = current["S7"]
+    assert "pending" not in s7
+    assert s7["src"] == "haedam-portal:/app/dist"
+
+
+def test_s7_timeline_starts_with_the_same_six_panel_steps():
+    panel.RUNS.pop("S7", None)
+
+    current = panel.s7_timeline()
+
+    assert [step["name"] for step in current["steps"]] == [
+        "① 기준 파일 변조", "② Wazuh FIM 경보", "③ Graylog 전달·분류",
+        "④ 탐지·자동 복구 (n8n → Wazuh AR)", "⑤ 효과: 원본 해시로 복구", "⑥ 기준 해시 전체 검증",
+    ]
+    assert {step["state"] for step in current["steps"]} == {"idle"}
+
+
+def test_s7_verify_reads_the_json_line_before_a_plain_status(monkeypatch):
+    monkeypatch.setattr(panel.s7, "sh", lambda *args, **kw: '{"action":"verify","result":"ok"}\nok')
+
+    assert panel.s7.verify() == "ok"
+
+
+def test_s7_assess_needs_restore_hash_portal_and_permission():
+    run = {"actions": [("wazuh-ar", "restore", "applied", "2026-11-11T17:51:50Z")],
+           "effect": {"attacker": "baseline_hash", "normal": "200"},
+           "restore": {"attacker_after": "200", "verify": "ok", "permission_enforced": True}}
+    assert panel.s7.assess(run) == "pass"
+    assert panel.s7.assess({**run, "effect": {"attacker": "tampered", "normal": "200"}}) == "fail"
+    assert panel.s7.assess({**run, "actions": [("wazuh-ar", "restore", "failed", None)]}) == "fail"
+    assert panel.s7.assess({**run, "restore": {**run["restore"], "permission_enforced": False}}) == "fail"
 
 
 def test_h1_is_connected_and_expects_posting_refused(monkeypatch):

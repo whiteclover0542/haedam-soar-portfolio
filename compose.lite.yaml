@@ -1,0 +1,7 @@
+# Low-memory local portal demonstration. This deliberately does not run the
+# SOC pipeline, automation, labs, or pfSense.
+services:
+  portal:
+    environment:
+      GELF_ENABLED: "0"
+      PORTAL_WAN_GATEWAY: ""

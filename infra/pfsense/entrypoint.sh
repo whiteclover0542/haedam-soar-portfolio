@@ -46,4 +46,4 @@ exec qemu-system-x86_64 $ACCEL -smp 2 -m "${PFSENSE_RAM:-1024}" \
   -drive file="$DISK",if=virtio,format=qcow2 $CDROM -boot order=cd \
   -netdev tap,id=wan,ifname=tapwan,script=no,downscript=no -device e1000,netdev=wan,mac=52:54:00:00:01:01 \
   -netdev tap,id=lan,ifname=taplan,script=no,downscript=no -device e1000,netdev=lan,mac=52:54:00:00:02:01 \
-  -vnc 127.0.0.1:0 -display none -serial none
+  -vnc 0.0.0.0:0 -display none -serial stdio
