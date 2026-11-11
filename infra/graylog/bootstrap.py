@@ -169,12 +169,29 @@ def main():
             gl.call("PUT", f"/api/events/notifications/{note_ids[name]}", {**raw, "id": note_ids[name]})
     print("mode:", "live (dry_run:false, store_real:true)" if args.live else "observe (n8n defaults)")
 
-    defs = {d["title"] for d in gl.call("GET", "/api/events/definitions?per_page=100")["event_definitions"]}
+    # A definition may have been imported before its notification existed.  Do not
+    # leave that live definition silent just because the title already exists.
+    defs = {d["title"]: d for d in gl.call("GET", "/api/events/definitions?per_page=100")["event_definitions"]}
     for path, note in DEFINITIONS.items():
         defn = replace_stream_ids(json.loads((ROOT / path).read_text("utf-8")), streams)
+        wanted_notifications = [{"notification_id": note_ids[note]}]
         if defn["title"] not in defs:
-            defn["notifications"] = [{"notification_id": note_ids[note]}]
+            defn["notifications"] = wanted_notifications
             gl.call("POST", "/api/events/definitions?schedule=true", defn)
+            created += 1
+            continue
+        existing = defs[defn["title"]]
+        # Graylog expands each attachment with ``notification_parameters: null``
+        # when it returns a definition, so compare the semantic IDs rather than
+        # the raw response objects.
+        existing_notification_ids = [n.get("notification_id") for n in existing.get("notifications", [])]
+        wanted_notification_ids = [n["notification_id"] for n in wanted_notifications]
+        if existing_notification_ids != wanted_notification_ids:
+            # The update endpoint accepts the definition representation returned
+            # by GET, including its id.  Preserve all detection fields and only
+            # repair the missing/wrong notification attachment.
+            existing["notifications"] = wanted_notifications
+            gl.call("PUT", f"/api/events/definitions/{existing['id']}", existing)
             created += 1
 
     print(f"생성 {created}")
