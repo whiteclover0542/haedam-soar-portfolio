@@ -4,6 +4,24 @@
 
 ```powershell
 python lab/s4/input.py --username zz_s4_test --src-ip 203.0.113.22
+python lab/s4/preflight.py
+python lab/s1s4/graylog/check.py
+python -m pytest -q tests/test_s4_offline.py tests/test_s4_preflight.py tests/test_s4_evidence.py
 ```
 
-실측 전에는 `lab/s1s4/graylog/check.py`와 `tests/test_s4_offline.py`를 통과시킨 뒤, H2 종료 및 반입 승인 후에만 별도 절차로 진행한다.
+`preflight.py`는 파일만 읽어 다음을 확인한다.
+
+- S4 입력이 여섯 이벤트의 오프라인 계획인지
+- Graylog 정의가 `username`·`src_ip` 묶기와 10분 창을 쓰는지
+- `haedam-31`이 비활성·`dry_run:true`인지
+- S4가 현재 Graylog bootstrap과 n8n 반입 범위에 **아직 포함되지 않았는지**
+
+`evidence.py`는 실제 실행 뒤에 **복사해 둔** 포털 이벤트 JSONL만 분석한다. S4 조건 시각, 계정 잠금, 비밀번호 재설정, 재로그인 시각과 두 구간의 초 단위 시간을 산출하지만, 서비스에는 요청하지 않는다.
+
+```powershell
+python lab/s4/evidence.py docs/tickets/S4/portal-events.jsonl
+```
+
+이 분석 방식은 이전 팀 S4 실측 기록의 조건(10분 안에 동일 계정·출발지에서 401 5회와 200 1회, 429 제외) 및 시간 산출만 재사용한 것이다. 이전 VM의 SSH 주소·계정·비밀번호·실행기는 포함하지 않는다.
+
+따라서 위 명령은 H3 실행 중에도 안전하다. 실측은 H3가 끝나고 별도 승인한 뒤에만 Graylog 반입·n8n 반입·전용 `zz_` 시민 계정으로 진행한다.
