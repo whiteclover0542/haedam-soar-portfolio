@@ -1,6 +1,6 @@
 # S8 포털 스캔 · 로그인 반복
 
-- **원작:** 김명준(B) — 탐지 정의 `lab/s8s10/graylog/s8-scan-then-login.json`, 입력 도구 `tools/s8s10_input.py`
+- **원작:** B — 탐지 정의 `lab/s8s10/graylog/s8-scan-then-login.json`, 입력 도구 `tools/s8s10_input.py`
 
 ## 시나리오
 

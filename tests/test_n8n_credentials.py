@@ -54,6 +54,15 @@ def test_h1_workflows_derived():
             and "restricted: $('" in sub_text and "/accounts/lock" not in sub_text)
 
 
+def test_h2_workflow_is_a_separate_portal_ip_block_flow():
+    main = load(Path("infra/n8n/workflows/haedam-36-h2-main.json"))
+    text = json.dumps(main, ensure_ascii=False)
+
+    assert main["id"] == "haedamH2Main01"
+    assert "haedam-h2" in text and "haedamPortalIp01" in text
+    assert "case_id: 'H2'" in text and "action: 'block'" in text
+
+
 def test_discord_is_optional_and_wired_when_set():
     assert "discordWebhookApi" not in {c["type"] for c in build_credentials(ENV)}
     creds = build_credentials({**ENV, "DISCORD_WEBHOOK_URL": "https://example.invalid/webhook"})

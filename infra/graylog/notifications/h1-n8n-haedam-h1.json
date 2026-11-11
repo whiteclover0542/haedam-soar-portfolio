@@ -1,6 +1,6 @@
 {
   "title": "n8n haedam-h1 (H1 → haedam-35)",
-  "description": "H1 민원 도배 → n8n haedam-35(작성 제한·티켓). 작성: 반소람",
+  "description": "H1 민원 도배 → n8n haedam-35(작성 제한·티켓). 작성: A",
   "config": {
     "type": "http-notification-v2",
     "url": "http://host.docker.internal:5678/webhook/haedam-h1",

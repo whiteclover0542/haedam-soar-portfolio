@@ -1,4 +1,4 @@
-"""H1 민원 도배: 계정별 민원 작성 제한(로그인·조회는 유지)과 대응 API. 작성: 반소람."""
+"""H1 민원 도배: 계정별 민원 작성 제한(로그인·조회는 유지)과 대응 API. 작성: A."""
 import itertools
 
 from conftest import PASSWORD, Actor

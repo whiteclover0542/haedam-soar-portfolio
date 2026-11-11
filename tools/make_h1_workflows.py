@@ -3,7 +3,7 @@
 python tools/make_h1_workflows.py
 Plain text substitutions on the raw files keep the originals' formatting, so the H1 files diff cleanly against
 their sources. Every substitution must hit; if an original changes, this stops instead of writing a wrong file.
-Written by 반소람 (H1). Originals: 김대훈 / 반소람(S1 분기).
+Written by A (H1). Originals: D / A(S1 분기).
 """
 import json
 from pathlib import Path

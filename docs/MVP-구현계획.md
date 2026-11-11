@@ -25,11 +25,11 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 - 호스트에 여는 포트는 모두 `127.0.0.1:`에 바인딩한다.
 - WSL2 설정(`%USERPROFILE%\.wslconfig`): `memory=12GB`, `kernelCommandLine = sysctl.vm.max_map_count=262144`
 - 팀원 코드는 파일 머리말 또는 `CREDITS.md`에 이름을 적는다.
-  - 포털: 김명준
-  - pfSense 도구·S8/S10 규칙: 김명준
-  - 티켓 저장소·대시보드·S7: 김상혁
-  - Graylog·n8n 구성·S12: 김대훈
-  - S1·S4 규칙·스크립트: 반소람
+  - 포털: B
+  - pfSense 도구·S8/S10 규칙: B
+  - 티켓 저장소·대시보드·S7: C
+  - Graylog·n8n 구성·S12: D
+  - S1·S4 규칙·스크립트: A
 - 실측값은 이 PC에서 잰 것만 `docs/tickets/`에 적는다. 팀 측정값을 옮길 때는 "팀 공통(4대 분산)"으로 표시한다.
 - 커밋 메시지 끝에는 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`를 붙인다.
 
@@ -103,7 +103,7 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 **인터페이스**
 - 만드는 것: 서비스 `pfsense`(WAN 203.0.113.1, LAN 10.250.0.1, SSH 22, 웹 443), `pf-ui`(10.250.0.10)
 - 네트워크 이름은 `wan`·`lan`이며, 이후 모든 compose가 `external: false`로 같은 이름을 쓴다(최상위 compose에서 정의).
-- 만드는 것: pfSense 안에 `/usr/local/sbin/haedam-pf-response`(김명준 도구, `lab/pfsense/install_bundle.py --install`)와 SSH 계정 `haedam-pf`. 이 계정은 공개키와 forced command로 위 도구만 실행한다.
+- 만드는 것: pfSense 안에 `/usr/local/sbin/haedam-pf-response`(B 도구, `lab/pfsense/install_bundle.py --install`)와 SSH 계정 `haedam-pf`. 이 계정은 공개키와 forced command로 위 도구만 실행한다.
 
 **방식**
 - 이미지는 `alpine:3.20`에 `qemu-system-x86_64`, `qemu-img`, `iproute2`, `novnc`를 넣는다.
@@ -121,7 +121,7 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
   - WAN 차단 기본 규칙 로깅 켜기
   - 원격 syslog 10.250.0.100:1514 UDP(filter 로그, Graylog 입력 포트. 11/09 514에서 변경)
   - SSH 켜기
-  - `lab/pfsense/INSTALL.md`(김명준) 순서대로 도구 설치, `haedam-pf` 계정과 공개키 등록
+  - `lab/pfsense/INSTALL.md`(B) 순서대로 도구 설치, `haedam-pf` 계정과 공개키 등록
 - [x] **5단계(스파이크 판정):** 다음을 확인한다. 하나라도 실패하면 설계 4-3의 대체안으로 바꾸고 저널에 원인을 적는다.
   - 임시 `nginx`를 10.250.0.2에 붙이고 `normal` 컨테이너에서 `curl -s -o /dev/null -w '%{http_code}' http://203.0.113.1/` → `200`
   - nginx 로그의 출발지가 `203.0.113.100`
@@ -270,7 +270,7 @@ pfSense CE 2.7.2는 QEMU 컨테이너 안 VM으로 돌리고, NIC 두 개를 각
 
 **파일**
 - 만들기: `lab/run_ticket.py`, `tests/test_run_ticket.py`, `docs/tickets/{S10,S8,S1}/README.md`, 캡처 `docs/tickets/*/img/`
-- 재사용: `tools/s8s10_input.py`(김명준, S8·S10 입력), `lab/s1s4/a_s1_step.py`(본인, S1 입력). 둘 다 `attacker` 컨테이너 안에서 실행한다.
+- 재사용: `tools/s8s10_input.py`(B, S8·S10 입력), `lab/s1s4/a_s1_step.py`(본인, S1 입력). 둘 다 `attacker` 컨테이너 안에서 실행한다.
 
 **인터페이스**
 - 만드는 것: `python lab/run_ticket.py {S1|S8|S10} [--restore]`(호스트 실행)

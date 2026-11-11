@@ -52,20 +52,34 @@ class Session:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", required=True)
-    ap.add_argument("mode", choices=["register", "fail", "login", "post"])
+    ap.add_argument("mode", choices=["register", "fail", "login", "post", "detail"])
     ap.add_argument("username")
     ap.add_argument("count", nargs="?", type=int, default=1)
+    ap.add_argument("petition_ids", nargs="*")
     a = ap.parse_args()
     s = Session(a.source)
     out = {"csrf": s.csrf(), "statuses": []}
+    if a.mode == "detail":
+        status, raw = s.call("POST", "/api/v1/auth/login", {"username": a.username, "password": os.environ["PW"]})
+        out["login"] = status
+        if status == 200:
+            s.token = json.loads(raw)["data"]["csrf_token"]
+        for petition_id in [a.count, *a.petition_ids]:
+            out["statuses"].append(s.call("GET", f"/api/v1/petitions/{petition_id}")[0])
+        print(json.dumps(out))
+        return
     if a.mode == "post":
         status, raw = s.call("POST", "/api/v1/auth/login", {"username": a.username, "password": os.environ["PW"]})
         out["login"] = status
         if status == 200:
             s.token = json.loads(raw)["data"]["csrf_token"]
+        out["petition_ids"] = []
         for i in range(a.count):
             body = {"title": f"실습 민원 {i + 1}번 확인 요청", "content": "H1 실습용 합성 민원입니다. 처리하지 않아도 됩니다.", "category": "기타"}
-            out["statuses"].append(s.call("POST", "/api/v1/petitions", body)[0])
+            created, created_raw = s.call("POST", "/api/v1/petitions", body)
+            out["statuses"].append(created)
+            if created == 201:
+                out["petition_ids"].append(json.loads(created_raw)["data"]["id"])
         out["list"] = s.call("GET", "/api/v1/petitions")[0]
         print(json.dumps(out))
         return

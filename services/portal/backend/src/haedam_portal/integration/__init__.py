@@ -79,7 +79,7 @@ def account_lock_by_username():
 
 @bp.post("/accounts/posting")
 def posting_response():
-    # H1 민원 도배(반소람): 그 계정의 민원 작성만 제한/해제한다. 로그인·조회·세션은 건드리지 않는다.
+    # H1 민원 도배(A): 그 계정의 민원 작성만 제한/해제한다. 로그인·조회·세션은 건드리지 않는다.
     authenticate_response()
     data = body()
     username = text(data, "username", 1, 40).lower()

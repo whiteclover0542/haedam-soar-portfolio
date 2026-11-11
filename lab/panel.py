@@ -1,4 +1,4 @@
-"""실습 제어판: 버튼으로 S10·S8·S1·H1 공격 → 효과 확인 → 해제. 반소람 작성.
+"""실습 제어판: 버튼으로 S10·S8·S1·H1 공격 → 효과 확인 → 해제. A 작성.
 
 python lab/panel.py        → http://127.0.0.1:8099 (브라우저가 자동으로 열림)
 버튼은 docs/실습-안내.md의 명령을 그대로 실행하고, 실행한 명령과 결과를 화면 로그에 보여 준다.
@@ -18,11 +18,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab.run_ticket import (H1_POSTS, NORMAL, ROOT, SEAT, SRC, TICKETS, env, get, http_code, portal_login,  # noqa: E402
                             portal_posting, sh, tickets_for)
+from lab.h2.input import run_h2  # noqa: E402
 
 PORT = 8099
 TOKEN = secrets.token_urlsafe(16)
 CASES = ["H1", "H2", "H3", "S1", "S4", "S7", "S8", "S10", "S12"]
-PENDING_CASES = {"H2", "H3", "S4", "S7", "S12"}
+PENDING_CASES = {"H3", "S4", "S7", "S12"}
+H2_GUIDE_PATH = ROOT / "lab" / "h2" / "README.md"
 USERS = {}    # S1·H1 이번 실행에서 만든 계정 {"user", "pw"} (이름·비밀번호는 메모리에만)
 RUNS = {}     # case → {"at": 공격 시각, "effect": 마지막 효과, "released": 해제 결과}
 LOCK = threading.Lock()  # 공격 버튼을 동시에 두 번 누르지 않게
@@ -47,6 +49,19 @@ def attack(case):
         statuses = [x["status"] for x in json.loads(sh("docker", "exec", "haedam-attacker", "cat", f"/tmp/{run}.json"))["http"]]
         log.append({"step": "스캔(404) → 보안 토큰(200) → 틀린 로그인(401)", "cmd": "docker exec haedam-attacker " + cmd,
                     "result": statuses})
+    elif case == "H2":
+        stamp = datetime.now().strftime("%H%M%S")
+        user, pw = "zz_a_h2_" + stamp, secrets.token_urlsafe(12)
+        victim, victim_pw = "zz_v_h2_" + stamp, secrets.token_urlsafe(12)
+        result = run_h2(portal_login, attacker=user, attacker_password=pw, victim=victim, victim_password=victim_pw,
+                        attacker_source=src, normal_source=NORMAL)
+        USERS[case] = {"user": user, "pw": pw, "victim": victim, "victim_pw": victim_pw,
+                       "foreign_ids": result["victim_petition_ids"], "own_id": result["attacker_petition_id"]}
+        log.append({"step": "fresh victim petitions created", "cmd": "portal_login.py post victim 3", "result": result["victim_petition_ids"]})
+        log.append({"step": "attacker requested three foreign petition details", "cmd": "portal_login.py detail attacker <foreign ids>",
+                    "result": result["statuses"]})
+        log.append({"step": "attacker self-petition access control", "cmd": "portal_login.py detail attacker <own id>",
+                    "result": result["own_status"]})
     elif case == "H1":
         user, pw = "zz_a_h1_" + datetime.now().strftime("%H%M%S"), secrets.token_urlsafe(12)
         USERS[case] = {"user": user, "pw": pw}
@@ -84,12 +99,28 @@ def h1_effect():
             {"step": "다른 정상 시민 민원 1건", "cmd": "portal_login.py post 1", "result": str(normal)}]
 
 
+def h2_effect():
+    """H2 response blocks only the attack source; the victim still reads own data."""
+    u = USERS.get("H2")
+    if not u:
+        return [{"step": "Run attack first", "cmd": "", "result": "-"}]
+    victim = portal_login("haedam-normal", NORMAL, "detail", u["victim"], str(u["foreign_ids"][0]), pw=u["victim_pw"])
+    return [{"step": "attacker source health check", "cmd": "curl /api/v1/health", "result": http_code("haedam-attacker", SRC["H2"])},
+            {"step": "victim reads own petition", "cmd": "portal_login.py detail victim <own id>",
+             "result": str(victim["statuses"][0])}]
+
+
 def effect(case):
     src = SRC[case]
     if case == "H1":
         out = h1_effect()
         if case in RUNS and len(out) == 3:
             RUNS[case]["effect"] = {"attacker": out[0]["result"], "normal": out[2]["result"]}
+        return out
+    if case == "H2":
+        out = h2_effect()
+        if case in RUNS and len(out) == 2:
+            RUNS[case]["effect"] = {"attacker": out[0]["result"], "normal": out[1]["result"]}
         return out
     out = [{"step": "공격자", "cmd": f"docker exec haedam-attacker curl --interface {src} http://203.0.113.1/api/v1/health",
             "result": http_code("haedam-attacker", src)},
@@ -105,7 +136,7 @@ def effect(case):
 
 
 def group_key(case):
-    return USERS.get(case, {}).get("user", "-") if case in ("S1", "H1") else SRC[case]
+    return USERS.get(case, {}).get("user", "-") if case in ("S1", "H1", "H2") else SRC[case]
 
 
 def latest_ticket(case):
@@ -151,8 +182,12 @@ EXPECT = {"S10": ("000", "pfSense에서 연결 자체가 끊김"), "S8": ("403",
 NORMAL_OK = {"H1": "201"}  # 나머지는 200
 
 
+EXPECT["H2"] = ("403", "attacker source blocked after the H2 alert")
+NORMAL_OK["H2"] = "200"
+
+
 def graylog_count(case, since):
-    q = f"username:{group_key(case)}" if case in ("S1", "H1") else f"src_ip:{SRC[case]}"
+    q = f"username:{group_key(case)}" if case in ("S1", "H1", "H2") else f"src_ip:{SRC[case]}"
     pw = env()["GRAYLOG_ADMIN_PASSWORD"]
     url = ("http://127.0.0.1:9000/api/search/universal/absolute?limit=1&query=" + urllib.parse.quote(q)
            + "&from=" + since.strftime("%Y-%m-%dT%H:%M:%S.000Z") + "&to=" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
@@ -177,7 +212,7 @@ def timeline(case):
     need = {"portal", "pfsense"} if case == "S10" else {"portal"}
     done = need <= {a["via"] for a in blocks}
     if t and done and run["effect"] is None and run["released"] is None:  # 차단이 들어가면(해제 전) 효과를 한 번 자동으로 본다
-        if case == "H1":
+        if case in ("H1", "H2"):
             effect(case)
         else:
             run["effect"] = {"attacker": http_code("haedam-attacker", SRC[case]), "normal": http_code("haedam-normal", NORMAL)}
@@ -209,7 +244,7 @@ def timeline(case):
 
 
 def pending_state(case):
-    return {
+    result = {
         "src": "연결 전",
         "pending": True,
         "steps": [{
@@ -218,6 +253,9 @@ def pending_state(case):
             "text": f"{case} 실습 도구와 탐지·대응 흐름을 연결한 뒤 실행할 수 있습니다.",
         }],
     }
+    if case == "H2":
+        result["guide_url"] = "/guide/h2"
+    return result
 
 
 def state():
@@ -245,6 +283,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
             return self._send(200, PAGE.replace("__TOKEN__", TOKEN), "text/html")
+        if self.path == "/guide/h2":
+            return self._send(200, H2_GUIDE_PATH.read_text(encoding="utf-8"), "text/markdown")
         if self.path == "/api/state" and self.headers.get("X-Panel-Token") == TOKEN:
             return self._send(200, state())
         self._send(404, {"error": "not found"})
@@ -313,7 +353,7 @@ let cur="H1",last={};
 function esc(s){return String(s??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
 function tabs(){document.getElementById("tabs").innerHTML=CASE_ORDER.map(c=>`<button class="${c===cur?'on':''}" onclick="cur='${c}';tabs();draw()">${c}</button>`).join("")}
 function draw(){const d=last[cur]||{},steps=d.steps||[];
- if(d.pending){const waiting=steps[0]||{};document.getElementById("panel").innerHTML=`<div class="top"><div><h2>${esc(INFO[cur][0])}</h2><p>${esc(waiting.text||"실습 도구 연결 전입니다.")}</p></div></div><div class="hint">연결이 완료되면 공격·효과 확인·해제 버튼이 표시됩니다.</div>`;return;}
+ if(d.pending){const waiting=steps[0]||{},guide=d.guide_url?`<p><a href="${d.guide_url}" target="_blank">H2 실습 안내 열기</a></p>`:"";document.getElementById("panel").innerHTML=`<div class="top"><div><h2>${esc(INFO[cur][0])}</h2><p>${esc(waiting.text||"실습 도구 연결 전입니다.")}</p>${guide}</div></div><div class="hint">연결이 완료되면 공격·효과 확인·해제 버튼이 표시됩니다.</div>`;return;}
  const list=steps.length?steps:["① 공격 보냄","② Graylog에 로그 도착","③ 탐지 (Graylog 경보)","④ 자동 대응 (n8n)","⑤ 효과","⑥ 해제 (사람이 확인 후)"].map(n=>({name:n,state:"idle",text:"[공격]을 누르면 시작합니다."}));
  const icon={done:"✓",wait:"…",bad:"!",idle:""};
  const next=!steps.length?"[공격]을 눌러 시작하세요.":steps.find(s=>s.state==="bad")?"빨간 단계를 확인하세요. 오른쪽 링크의 화면에서 원인을 볼 수 있습니다.":

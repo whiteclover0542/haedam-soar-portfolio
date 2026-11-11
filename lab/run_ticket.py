@@ -17,9 +17,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = {"S1": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11"}
-WINDOW_MIN = {"S1": 30, "S8": 15, "S10": 15, "H1": 10}
-SEAT = {"S1": "A", "S8": "B", "S10": "B", "H1": "A"}
+SRC = {"S1": "203.0.113.11", "S8": "203.0.113.21", "S10": "203.0.113.22", "H1": "203.0.113.11", "H2": "203.0.113.11"}
+WINDOW_MIN = {"S1": 30, "S8": 15, "S10": 15, "H1": 10, "H2": 5}
+SEAT = {"S1": "A", "S8": "B", "S10": "B", "H1": "A", "H2": "A"}
 H1_POSTS = 8  # 탐지 기준 N=5보다 넉넉히(초안). 기준선은 --baseline
 RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting")
 NORMAL = "203.0.113.100"

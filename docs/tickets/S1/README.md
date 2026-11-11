@@ -1,6 +1,6 @@
 # S1 로그인 무차별 대입
 
-- **원작:** 반소람(A) — 탐지 정의 `lab/s1s4/graylog/s1-login-bruteforce.json`, 포털 대응 API
+- **원작:** A — 탐지 정의 `lab/s1s4/graylog/s1-login-bruteforce.json`, 포털 대응 API
 
 ## 시나리오
 

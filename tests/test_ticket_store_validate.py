@@ -11,3 +11,11 @@ def test_h1_detected_record_is_accepted():
                           "title": "H1 민원 도배(작성 제한)", "asset_id": "haedam-portal", "src_ip": None,
                           "username": "zz_a_h1", "event_ids": ["01M6ZHATV8EA6T96HRE2JSKRP5"], "action": None})
     assert "H1" in dashboard.CASES
+
+
+def test_h2_detected_record_is_accepted():
+    validate.record_body({"seat": "A", "case_id": "H2", "group_key": "zz_a_h2", "stage": "detected",
+                          "title": "H2 foreign petition detail probing", "asset_id": "haedam-portal",
+                          "src_ip": "203.0.113.11", "username": "zz_a_h2",
+                          "event_ids": ["01H2ACCESSDENIED"], "action": None})
+    assert "H2" in dashboard.CASES

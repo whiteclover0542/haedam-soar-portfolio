@@ -1,6 +1,6 @@
 # H1 민원 도배
 
-- **작성:** 반소람(A) — 포털 작성 제한 API, 탐지 정의 `lab/h1/graylog/h1-petition-flood.json`, n8n `haedam-35`·`haedam-18`
+- **작성:** A — 포털 작성 제한 API, 탐지 정의 `lab/h1/graylog/h1-petition-flood.json`, n8n `haedam-35`·`haedam-18`
 
 ## 시나리오
 

@@ -1,6 +1,6 @@
 # S10 경계 차단 · 포털 스캔 · 로그인 반복
 
-- **원작:** 김명준(B) — 탐지 정의 `lab/s8s10/graylog/s10-three-layer.json`, 입력 도구 `tools/s8s10_input.py`, pfSense 대응 도구 `lab/pfsense/`
+- **원작:** B — 탐지 정의 `lab/s8s10/graylog/s10-three-layer.json`, 입력 도구 `tools/s8s10_input.py`, pfSense 대응 도구 `lab/pfsense/`
 - **이 PC에서 보는 것:** 서버(포털)·Graylog·pfSense·n8n·티켓 저장소가 한 번에 맞물리는지
 
 ## 시나리오

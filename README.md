@@ -3,8 +3,8 @@
 팀 NoBugs(Aleph) 캡스톤 **해담시청 SOAR**를 PC 한 대에서 설치·실측할 수 있도록 다시 구성한 개인 포트폴리오입니다. 팀 4대 분산 환경(포털·pfSense·Graylog·n8n·Wazuh)을 Docker 네트워크로 옮기면서 팀 주소 체계(`203.0.113.x` / `10.250.0.x`)를 그대로 유지했습니다.
 
 - **팀 원본:** [aleph-soar-capstone](https://github.com/NoBugs-Aleph/aleph-soar-capstone) · [haedam-portal-backend](https://github.com/NoBugs-Aleph/haedam-portal-backend) · [haedam-portal-frontend](https://github.com/NoBugs-Aleph/haedam-portal-frontend)
-- **팀원:** A 반소람 · B 김명준 · C 김상혁 · D 김대훈 (담당은 [CREDITS.md](CREDITS.md))
-- **본인(반소람, A):** 팀에서는 포털 서비스·대응 API와 S1·S4(계정 탈취) 담당. 이 저장소에서는 PC 한 대 구성 전체(compose, pfSense QEMU 컨테이너, Graylog·n8n 반입 스크립트, 티켓 실행기, 문서)를 작성하고 실측했습니다.
+- **팀원:** A · B · C · D (담당은 [CREDITS.md](CREDITS.md))
+- **본인(A):** 팀에서는 포털 서비스·대응 API와 S1·S4(계정 탈취) 담당. 이 저장소에서는 PC 한 대 구성 전체(compose, pfSense QEMU 컨테이너, Graylog·n8n 반입 스크립트, 티켓 실행기, 문서)를 작성하고 실측했습니다.
 
 ## 구성
 

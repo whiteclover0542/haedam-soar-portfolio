@@ -1,6 +1,6 @@
 {
   "title": "H1 민원 도배 (username)",
-  "description": "H1(반소람). 10분 안 같은 username의 민원 등록(petition.created, 201)이 5건 이상. 정상 시민 기준선은 docs/tickets/H1/README.md. 대응은 그 계정의 민원 작성만 제한(로그인·조회 유지).",
+  "description": "H1(A). 10분 안 같은 username의 민원 등록(petition.created, 201)이 5건 이상. 정상 시민 기준선은 docs/tickets/H1/README.md. 대응은 그 계정의 민원 작성만 제한(로그인·조회 유지).",
   "priority": 2,
   "alert": true,
   "config": {

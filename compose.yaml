@@ -30,7 +30,7 @@ volumes:
   n8n-data:
 
 services:
-  # ── 서버: 포털(원작 반소람)·MySQL·티켓 저장소(원작 김상혁) ──
+  # ── 서버: 포털(원작 A)·MySQL·티켓 저장소(원작 C) ──
   portal-db:
     image: mysql:8.4
     container_name: haedam-portal-db
@@ -80,7 +80,7 @@ services:
     mem_limit: 256m
     restart: unless-stopped
 
-  # ── Graylog (원작 compose·규칙: 김대훈·김명준, 단일 PC 조정: 반소람). 설정 반입: infra/graylog/bootstrap.py ──
+  # ── Graylog (원작 compose·규칙: D·B, 단일 PC 조정: A). 설정 반입: infra/graylog/bootstrap.py ──
   mongodb:
     image: mongo:6.0.28
     container_name: haedam-mongodb
@@ -132,7 +132,7 @@ services:
     mem_limit: 1536m
     restart: unless-stopped
 
-  # ── n8n (원작 워크플로: 김대훈 외, 단일 PC 반입: 반소람). 반입: infra/n8n/load.py ──
+  # ── n8n (원작 워크플로: D 외, 단일 PC 반입: A). 반입: infra/n8n/load.py ──
   n8n:
     image: n8nio/n8n:2.39.5
     container_name: haedam-n8n
@@ -151,7 +151,7 @@ services:
     mem_limit: 768m
     restart: unless-stopped
 
-  # ── pfSense (원작 규칙·도구: 김명준, 컨테이너화: 반소람) ──
+  # ── pfSense (원작 규칙·도구: B, 컨테이너화: A) ──
   pfsense:
     build: infra/pfsense
     container_name: haedam-pfsense
