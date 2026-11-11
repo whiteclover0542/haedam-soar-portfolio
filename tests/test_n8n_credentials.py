@@ -78,6 +78,14 @@ def test_h3_workflow_locks_before_requesting_snapshot_restore():
     assert text.index("haedamAccountLock01") < text.index("/response/petitions/")
 
 
+def test_h3_workflow_notifies_discord_after_restore():
+    main = load(Path("infra/n8n/workflows/haedam-37-h3-main.json"))
+    text = json.dumps(main, ensure_ascii=False)
+
+    assert "haedamDiscord01" in text
+    assert text.index("/response/petitions/") < text.index("haedamDiscord01")
+
+
 def test_discord_is_optional_and_wired_when_set():
     assert "discordWebhookApi" not in {c["type"] for c in build_credentials(ENV)}
     creds = build_credentials({**ENV, "DISCORD_WEBHOOK_URL": "https://example.invalid/webhook"})

@@ -332,6 +332,38 @@
                 }
             },
             {
+                "id": "discord-input",
+                "name": "Discord notification input",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [
+                    3520,
+                    -240
+                ],
+                "parameters": {
+                    "jsCode": "const result=$input.first().json; const x=$('Lock record gate').first().json.ctx; return [{json:{ctx:x,level:result.ok?'warn':'error',case_id:x.case_id,title:result.ok?'H3 민원 처리 결과 복구 완료':'H3 민원 처리 결과 복구 실패',src_ip:null,ticket_id:x.ticket_id,result:result.verdict}}];"
+                }
+            },
+            {
+                "id": "discord",
+                "name": "Discord notification",
+                "type": "n8n-nodes-base.executeWorkflow",
+                "typeVersion": 1.2,
+                "position": [
+                    3740,
+                    -240
+                ],
+                "parameters": {
+                    "source": "database",
+                    "workflowId": {
+                        "__rl": true,
+                        "value": "haedamDiscord01",
+                        "mode": "id"
+                    },
+                    "options": {}
+                }
+            },
+            {
                 "id": "respond",
                 "name": "Respond",
                 "type": "n8n-nodes-base.respondToWebhook",
@@ -534,6 +566,28 @@
                 ]
             },
             "Restore result": {
+                "main": [
+                    [
+                        {
+                            "node": "Discord notification input",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Discord notification input": {
+                "main": [
+                    [
+                        {
+                            "node": "Discord notification",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Discord notification": {
                 "main": [
                     [
                         {
