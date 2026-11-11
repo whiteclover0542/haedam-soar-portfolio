@@ -140,6 +140,53 @@ def account_state():
     return ok({"username": target.username, "locked": target.locked})
 
 
+def apply_snapshot(petition, revision):
+    """Apply one immutable snapshot to a locked petition and describe the change."""
+    changed = (petition.status, petition.reply, petition.assignee_id) != (
+        revision.status, revision.reply, revision.assignee_id)
+    petition.status = revision.status
+    petition.reply = revision.reply
+    petition.assignee_id = revision.assignee_id
+    return {"petition_id": petition.id, "revision_id": revision.id, "status": petition.status,
+            "reply": petition.reply, "assignee_id": petition.assignee_id, "changed": changed}
+
+
+def save_restore(result, changes, username, request_key, fingerprint):
+    db.session.add(ResponseReceipt(request_key=request_key, fingerprint=fingerprint, result=result))
+    db.session.commit()
+    if any(item["changed"] for item in changes):
+        emit("petition.restored", "success", 200, username=username)
+    return ok(result)
+
+
+H3_RESTORE_WINDOW = timedelta(minutes=15)  # Graylog 5-minute window + evaluation and n8n delay
+
+
+@bp.post("/petitions/latest-revision/restore")
+def restore_recent_petitions_for_staff():
+    """H3: restore every petition the alerted staff changed recently to its earliest snapshot in the window."""
+    authenticate_response()
+    username = text(body(), "username", 1, 40).lower()
+    request_key, fingerprint = request_digests({"username": username, "action": "latest_revision_restore"})
+    previous = replayed(request_key, fingerprint)
+    if previous:
+        return ok(previous)
+    revisions = db.session.scalars(
+        select(PetitionRevision).join(User, PetitionRevision.actor_id == User.id)
+        .where(User.username == username, PetitionRevision.created_at >= now() - H3_RESTORE_WINDOW)
+        .order_by(PetitionRevision.id)
+    ).all()
+    earliest = {}
+    for revision in revisions:
+        earliest.setdefault(revision.petition_id, revision)
+    if not earliest:
+        fail(404, "NOT_FOUND", "복원할 담당자 변경 이력을 찾을 수 없습니다.")
+    petitions = db.session.scalars(
+        select(Petition).where(Petition.id.in_(earliest)).order_by(Petition.id).with_for_update()).all()
+    restored = [apply_snapshot(petition, earliest[petition.id]) for petition in petitions]
+    return save_restore({"username": username, "restored": restored}, restored, username, request_key, fingerprint)
+
+
 @bp.post("/petitions/<int:petition_id>/restore")
 def restore_petition(petition_id):
     """Restore one petition from its immutable H3 pre-change snapshot."""
@@ -160,18 +207,8 @@ def restore_petition(petition_id):
     previous = replayed(request_key, fingerprint)
     if previous:
         return ok(previous)
-    changed = (petition.status, petition.reply, petition.assignee_id) != (
-        revision.status, revision.reply, revision.assignee_id)
-    petition.status = revision.status
-    petition.reply = revision.reply
-    petition.assignee_id = revision.assignee_id
-    result = {"petition_id": petition.id, "revision_id": revision.id, "status": petition.status,
-              "reply": petition.reply, "assignee_id": petition.assignee_id, "changed": changed}
-    db.session.add(ResponseReceipt(request_key=request_key, fingerprint=fingerprint, result=result))
-    db.session.commit()
-    if changed:
-        emit("petition.restored", "success", 200, username=revision.actor.username)
-    return ok(result)
+    result = apply_snapshot(petition, revision)
+    return save_restore(result, [result], revision.actor.username, request_key, fingerprint)
 
 
 @bp.get("/ips")

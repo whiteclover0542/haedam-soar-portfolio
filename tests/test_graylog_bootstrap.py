@@ -77,6 +77,23 @@ def test_bootstrap_lists_h3_staff_update_definition():
     assert NOTIFICATIONS["haedam-h3"] == "infra/graylog/notifications/h3-n8n-haedam-h3.json"
 
 
+def test_h3_notification_uses_only_aggregate_fields_that_graylog_preserves():
+    import json
+    from pathlib import Path
+
+    notification = json.loads(Path("infra/graylog/notifications/h3-n8n-haedam-h3.json").read_text(encoding="utf-8"))
+    template = notification["config"]["body_template"]
+
+    assert "petition_id" not in template
+    assert "revision_id" not in template
+    rendered = template.replace("${event.id}", "event-1").replace(
+        "${event.fields.username}", "staff-1"
+    ).replace("${event.fields.case_id}", "H3")
+    assert json.loads(rendered) == {
+        "event_id": "event-1", "asset_id": "haedam-portal", "username": "staff-1", "case_id": "H3"
+    }
+
+
 def test_h3_definition_copies_restore_identifiers_from_the_source_message():
     import json
     from pathlib import Path

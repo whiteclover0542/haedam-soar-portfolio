@@ -86,6 +86,16 @@ def test_h3_workflow_notifies_discord_after_restore():
     assert text.index("/response/petitions/") < text.index("haedamDiscord01")
 
 
+def test_h3_workflow_restores_the_alerted_staffs_latest_snapshot_without_aggregate_source_fields():
+    main = load(Path("infra/n8n/workflows/haedam-37-h3-main.json"))
+    validate = next(node for node in main["nodes"] if node["id"] == "validate")["parameters"]["jsCode"]
+    restore = next(node for node in main["nodes"] if node["id"] == "restore")["parameters"]
+
+    assert "'petition_id','revision_id'" not in validate
+    assert "/response/petitions/latest-revision/restore" in restore["url"]
+    assert "username" in restore["jsonBody"]
+
+
 def test_discord_is_optional_and_wired_when_set():
     assert "discordWebhookApi" not in {c["type"] for c in build_credentials(ENV)}
     creds = build_credentials({**ENV, "DISCORD_WEBHOOK_URL": "https://example.invalid/webhook"})

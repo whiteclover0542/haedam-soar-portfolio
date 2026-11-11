@@ -38,7 +38,7 @@
                     0
                 ],
                 "parameters": {
-                    "jsCode": "const t=$input.first().json.body||{}; const required=['event_id','asset_id','username','petition_id','revision_id','case_id']; const missing=required.filter(k=>!t[k]); if(missing.length||t.case_id!=='H3') return [{json:{ok:false,proceed:false,verdict:'invalid_input',missing,detail:'case_id must be H3'}}]; const cfg={dry_run:t.dry_run!==false,store_real:t.store_real===true}; return [{json:{ok:true,proceed:true,ctx:{...t,cfg,seat:'C',group_key:t.username,title:'H3 petition integrity change'}}}];"
+                    "jsCode": "const t=$input.first().json.body||{}; const required=['event_id','asset_id','username','case_id']; const missing=required.filter(k=>!t[k]); if(missing.length||t.case_id!=='H3') return [{json:{ok:false,proceed:false,verdict:'invalid_input',missing,detail:'case_id must be H3'}}]; const cfg={dry_run:t.dry_run!==false,store_real:t.store_real===true}; return [{json:{ok:true,proceed:true,ctx:{...t,cfg,seat:'C',group_key:t.username,title:'H3 petition integrity change'}}}];"
                 }
             },
             {
@@ -286,7 +286,7 @@
                 ],
                 "parameters": {
                     "method": "POST",
-                    "url": "=http://10.250.0.2:5000/api/v1/response/petitions/{{ $('Lock record gate').first().json.ctx.petition_id }}/restore",
+                    "url": "=http://10.250.0.2:5000/api/v1/response/petitions/latest-revision/restore",
                     "authentication": "genericCredentialType",
                     "genericAuthType": "httpHeaderAuth",
                     "sendHeaders": true,
@@ -300,7 +300,7 @@
                     },
                     "sendBody": true,
                     "specifyBody": "json",
-                    "jsonBody": "={{ JSON.stringify({ revision_id: Number($('Lock record gate').first().json.ctx.revision_id) }) }}",
+                    "jsonBody": "={{ JSON.stringify({ username: $('Lock record gate').first().json.ctx.username }) }}",
                     "options": {
                         "timeout": 5000,
                         "response": {

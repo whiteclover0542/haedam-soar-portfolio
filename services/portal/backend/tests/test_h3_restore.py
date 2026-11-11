@@ -1,7 +1,9 @@
+from datetime import timedelta
+
 from sqlalchemy import select
 
 from test_portal import create
-from haedam_portal.models import PetitionRevision, db
+from haedam_portal.models import Petition, PetitionRevision, User, db
 
 
 def test_staff_status_change_stores_the_complete_prechange_snapshot(app, actors):
@@ -68,3 +70,33 @@ def test_response_restore_rejects_a_revision_from_another_petition(app, actors):
     response = app.test_client().post(f"/api/v1/response/petitions/{second['id']}/restore", json={"revision_id": revision.id}, headers=headers)
 
     assert response.status_code == 409
+
+
+def test_response_restores_every_recent_petition_changed_by_the_alerted_staff(app, actors):
+    staff = actors["staff"]
+    old, first, second = create(actors["citizen"]), create(actors["citizen"]), create(actors["other"])
+    for petition in (old, first, second):
+        assigned = staff.call("PATCH", f"/petitions/{petition['id']}/assignment", {}).json["data"]
+        assert staff.call("PATCH", f"/petitions/{petition['id']}/status", {
+            "status": "in_progress", "version": assigned["version"],
+        }).status_code == 200
+    with app.app_context():
+        staff_id = db.session.scalar(select(User.id).where(User.username == "staff"))
+        revisions = db.session.scalars(
+            select(PetitionRevision).where(PetitionRevision.actor_id == staff_id).order_by(PetitionRevision.id)
+        ).all()
+        revisions[0].created_at -= timedelta(hours=1)
+        db.session.commit()
+        expected = [{"petition_id": r.petition_id, "revision_id": r.id, "status": "received", "reply": "",
+                     "assignee_id": r.assignee_id, "changed": True} for r in revisions[1:]]
+
+    response = app.test_client().post(
+        "/api/v1/response/petitions/latest-revision/restore",
+        json={"username": "staff"},
+        headers={"X-Response-Key": app.config["RESPONSE_API_KEY"], "Idempotency-Key": "h3-latest-restore-0001"},
+    )
+
+    assert response.status_code == 200
+    assert response.json["data"] == {"username": "staff", "restored": expected}
+    with app.app_context():
+        assert db.session.get(Petition, old["id"]).status == "in_progress"
