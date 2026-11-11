@@ -51,6 +51,19 @@ def test_other_citizen_detail_denial_is_logged_for_h2(app, actors):
     assert denied[0]["details"]["status"] == 403
 
 
+def test_staff_detail_view_is_logged_for_h4_but_citizen_view_is_not(app, actors):
+    petition = create(actors["citizen"])
+
+    assert actors["staff"].call("GET", f"/petitions/{petition['id']}").status_code == 200
+    assert actors["citizen"].call("GET", f"/petitions/{petition['id']}").status_code == 200
+
+    events = [json.loads(line) for line in Path(app.config["EVENT_LOG_PATH"]).read_text(encoding="utf-8").splitlines()]
+    viewed = [event for event in events if event["event_type"] == "petition.viewed"]
+    assert len(viewed) == 1
+    assert viewed[0]["username"] == "staff"
+    assert viewed[0]["details"]["petition_id"] == petition["id"]
+
+
 def test_stale_version_and_invalid_transition(actors):
     data = create(actors["citizen"])
     staff = actors["staff"]

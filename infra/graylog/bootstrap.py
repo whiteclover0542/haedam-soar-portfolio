@@ -31,6 +31,7 @@ NOTIFICATIONS = {"haedam-s1": "infra/graylog/notifications/s1-n8n-haedam-s1.json
                  "haedam-h1": "infra/graylog/notifications/h1-n8n-haedam-h1.json",
                  "haedam-h2": "infra/graylog/notifications/h2-n8n-haedam-h2.json",
                  "haedam-h3": "infra/graylog/notifications/h3-n8n-haedam-h3.json",
+                 "haedam-h4": "infra/graylog/notifications/h4-n8n-haedam-h4.json",
                  "haedam-s12": "infra/graylog/notifications/s12-n8n-haedam-s12.json",
                  "haedam-s7": "infra/graylog/notifications/s7-n8n-haedam-s7.json"}
 DEFINITIONS = {"lab/s1s4/graylog/s1-login-bruteforce.json": "haedam-s1",
@@ -40,6 +41,7 @@ DEFINITIONS = {"lab/s1s4/graylog/s1-login-bruteforce.json": "haedam-s1",
                "lab/h1/graylog/h1-petition-flood.json": "haedam-h1",
                "lab/h2/graylog/h2-petition-access-denied.json": "haedam-h2",
                "lab/h3/graylog/h3-petition-update.json": "haedam-h3",
+               "lab/h4/graylog/h4-staff-bulk-view.json": "haedam-h4",
                "lab/s12/graylog/s12-request-flood.json": "haedam-s12",
                "lab/s7/graylog/s7-fim-change.json": "haedam-s7"}
 

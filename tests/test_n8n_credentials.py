@@ -113,3 +113,24 @@ def test_discord_notification_shows_risk_score_and_dashboard_link():
     assert "dashboard_url" in code
     assert "보안 대시보드 열기" in code
     assert "심각" in code
+
+
+def test_h4_workflow_locks_the_staff_account_without_restoring_petitions():
+    main = load(Path("infra/n8n/workflows/haedam-38-h4-main.json"))
+    text = json.dumps(main, ensure_ascii=False)
+
+    assert main["id"] == "haedamH4Main01" and main["active"] is False
+    assert "haedam-h4" in text and "case_id must be H4" in text
+    assert "haedamAccountLock01" in text and "/response/petitions/" not in text
+    names = {node["name"] for node in main["nodes"]}
+    for source, outputs in main["connections"].items():
+        assert source in names
+        assert all(t["node"] in names for out in outputs["main"] for t in out)
+
+
+def test_idempotency_keys_stay_valid_for_a_one_digit_execution_id():
+    """The ticket store needs 8-100 characters; a fresh n8n starts execution ids at 1 (H3/H4 `-lock` was 7)."""
+    import re
+    for path in Path("infra/n8n/workflows").glob("*.json"):
+        for suffix in re.findall(r"idempotency_key: ?`\$\{\$execution\.id\}([^`]*)`", path.read_text(encoding="utf-8")):
+            assert len("1" + suffix) >= 8, (path.name, suffix)

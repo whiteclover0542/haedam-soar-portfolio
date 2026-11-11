@@ -207,7 +207,7 @@
                     -160
                 ],
                 "parameters": {
-                    "jsCode": "const x=$input.first().json.ctx, r=x.lock; return [{json:{ctx:x,mode:'record',stage:'applied',seat:x.seat,case_id:x.case_id,group_key:x.group_key,title:x.title,asset_id:x.asset_id,src_ip:null,username:x.username,event_ids:[x.event_id],idempotency_key:`${$execution.id}-lock`,action:{bot:'111',target:x.username,via:'portal',action:'lock',result:r.result,applied_verified:r.applied_verified??null,effect_verified:null,effect_verified_at:null,requested_at:r.requested_at,finished_at:r.finished_at,n8n_execution_id:String($execution.id),detail:r.detail}}}];"
+                    "jsCode": "const x=$input.first().json.ctx, r=x.lock; return [{json:{ctx:x,mode:'record',stage:'applied',seat:x.seat,case_id:x.case_id,group_key:x.group_key,title:x.title,asset_id:x.asset_id,src_ip:null,username:x.username,event_ids:[x.event_id],idempotency_key:`${$execution.id}-lock-1`,action:{bot:'111',target:x.username,via:'portal',action:'lock',result:r.result,applied_verified:r.applied_verified??null,effect_verified:null,effect_verified_at:null,requested_at:r.requested_at,finished_at:r.finished_at,n8n_execution_id:String($execution.id),detail:r.detail}}}];"
                 }
             },
             {
