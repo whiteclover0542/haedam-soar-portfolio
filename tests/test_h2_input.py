@@ -34,8 +34,10 @@ def test_run_h2_creates_three_foreign_denials_and_a_self_check():
             return {"statuses": [201, 201, 201], "ids": [41, 42, 43]}
         if mode == "post":
             return {"statuses": [201], "ids": [44]}
-        if mode == "detail":
-            return {"login": 200, "statuses": [403, 403, 403] if len(values) == 3 else [200]}
+        if mode == "view":
+            assert len(values) == 1
+            ids = values[0].removeprefix("--ids=").split(",")
+            return {"login": 200, "statuses": [403, 403, 403] if len(ids) == 3 else [200]}
         raise AssertionError(mode)
 
     run = input_tool.run_h2(
@@ -45,4 +47,4 @@ def test_run_h2_creates_three_foreign_denials_and_a_self_check():
     assert run["statuses"] == [403, 403, 403]
     assert run["own_status"] == 200
     assert run["victim_petition_ids"] == [41, 42, 43]
-    assert ("haedam-attacker", "203.0.113.11", "detail", "attacker", ("41", "42", "43")) in calls
+    assert ("haedam-attacker", "203.0.113.11", "view", "attacker", ("--ids=41,42,43",)) in calls

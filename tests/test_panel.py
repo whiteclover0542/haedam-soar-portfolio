@@ -36,3 +36,23 @@ def test_h2_is_connected_like_h1_and_uses_the_same_reversible_response_path(monk
     assert panel.SRC["H2"] == panel.SRC["H1"]
     assert panel.EXPECT["H2"][0] == "403"
     assert panel.NORMAL_OK["H2"] == "200"
+
+
+def test_h2_effect_checks_victim_petition_with_portal_view_contract(monkeypatch):
+    panel.USERS["H2"] = {
+        "user": "attacker", "pw": "pw-a", "victim": "victim", "victim_pw": "pw-v", "foreign_ids": [41],
+    }
+    calls = []
+
+    def portal(container, source, mode, username, *values, pw=None):
+        calls.append((container, source, mode, username, values))
+        return {"statuses": [200]}
+
+    monkeypatch.setattr(panel, "portal_login", portal)
+    monkeypatch.setattr(panel, "http_code", lambda *_: "403")
+
+    result = panel.h2_effect()
+
+    assert result[0]["result"] == "403"
+    assert result[1]["result"] == "200"
+    assert ("haedam-normal", panel.NORMAL, "view", "victim", ("--ids=41",)) in calls

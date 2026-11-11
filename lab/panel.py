@@ -104,7 +104,8 @@ def h2_effect():
     u = USERS.get("H2")
     if not u:
         return [{"step": "Run attack first", "cmd": "", "result": "-"}]
-    victim = portal_login("haedam-normal", NORMAL, "detail", u["victim"], str(u["foreign_ids"][0]), pw=u["victim_pw"])
+    victim = portal_login("haedam-normal", NORMAL, "view", u["victim"],
+                          f"--ids={u['foreign_ids'][0]}", pw=u["victim_pw"])
     return [{"step": "attacker source health check", "cmd": "curl /api/v1/health", "result": http_code("haedam-attacker", SRC["H2"])},
             {"step": "victim reads own petition", "cmd": "portal_login.py detail victim <own id>",
              "result": str(victim["statuses"][0])}]
