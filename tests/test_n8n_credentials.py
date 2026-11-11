@@ -49,7 +49,9 @@ def test_h1_workflows_derived():
     assert "haedam-h1" in text and "haedamPortalPosting01" in text and "haedamPortalIp01" not in text
     assert "restrict_posting" in text and "'112'" not in text
     sub_text = json.dumps(sub, ensure_ascii=False)
-    assert "/api/v1/response/accounts/posting" in sub_text and "restricted: true" in sub_text and "/accounts/lock" not in sub_text
+    # restricted는 action에서 파생된다(restrict→true, release→false). 본문은 그 값을 동적으로 보낸다(해제도 같은 워크플로로).
+    assert ("/api/v1/response/accounts/posting" in sub_text and "b.action === 'restrict'" in sub_text
+            and "restricted: $('" in sub_text and "/accounts/lock" not in sub_text)
 
 
 def test_discord_is_optional_and_wired_when_set():
