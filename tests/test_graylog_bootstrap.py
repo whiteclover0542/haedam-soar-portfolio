@@ -104,3 +104,16 @@ def test_h3_definition_copies_restore_identifiers_from_the_source_message():
     fields = definition["field_spec"]
     assert fields["petition_id"]["providers"][0]["template"] == "${source.petition_id}"
     assert fields["revision_id"]["providers"][0]["template"] == "${source.revision_id}"
+
+
+def test_bootstrap_lists_h4_staff_bulk_view_definition():
+    import json
+    from pathlib import Path
+    from infra.graylog.bootstrap import DEFINITIONS, NOTIFICATIONS
+
+    assert DEFINITIONS["lab/h4/graylog/h4-staff-bulk-view.json"] == "haedam-h4"
+    definition = json.loads(Path("lab/h4/graylog/h4-staff-bulk-view.json").read_text(encoding="utf-8"))
+    assert definition["config"]["group_by"] == ["username"] and definition["config"]["search_within_ms"] == 600000
+    assert definition["field_spec"]["case_id"]["providers"][0]["template"] == "H4"
+    notification = json.loads(Path(NOTIFICATIONS["haedam-h4"]).read_text(encoding="utf-8"))
+    assert notification["config"]["url"].endswith("/webhook/haedam-h4")

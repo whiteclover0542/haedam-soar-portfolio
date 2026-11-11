@@ -14,7 +14,7 @@ def test_state_orders_connected_cases_including_s7(monkeypatch):
 
     current = panel.state()
 
-    assert list(current) == ["H1", "H2", "H3", "S1", "S4", "S7", "S8", "S10", "S12"]
+    assert list(current) == ["H1", "H2", "H3", "H4", "S1", "S4", "S7", "S8", "S10", "S12"]
     assert "pending" not in current["H3"] and panel.EXPECT["H3"][0] == "401"
     assert "pending" not in current["S4"] and panel.EXPECT["S4"][0] == "401"
     assert "pending" not in current["S12"] and panel.EXPECT["S12"][0] == "403"
@@ -121,3 +121,13 @@ def test_h1_and_h3_release_close_the_ticket_through_the_release_webhook(monkeypa
     assert panel.release("H3")[1]["result"] == "released"
     assert order == [("webhook", "H1"), ("unlock", "H3"), ("webhook", "H3")]   # H3: unlock first, or the webhook holds
     assert panel.SEAT["H3"] == "C"
+
+
+def test_h4_assess_needs_lock_refusal_citizen_restore_and_permission():
+    run = {"actions": [("portal", "lock", "applied", "2026-11-11T18:45:31Z")],
+           "effect": {"attacker": "401", "normal": "200"},
+           "restore": {"attacker_after": "200", "status_after": "restored", "permission_enforced": True}}
+    assert panel.h4.assess(run) == "pass"
+    assert panel.h4.assess({**run, "actions": []}) == "fail"  # locked but not recorded (the pre-fix run)
+    assert panel.h4.assess({**run, "effect": {"attacker": "200", "normal": "200"}}) == "fail"
+    assert panel.h4.assess({**run, "restore": {**run["restore"], "status_after": "open"}}) == "fail"

@@ -19,7 +19,7 @@ CONTAINER = "haedam-n8n"
 # filtering in the n8n list. Add a line here when a stage (S7·S12) starts.
 # Everything listed is published: webhooks need it, and n8n 2.x refuses to run an unpublished sub-workflow.
 SCOPE = {
-    "haedamS1Main01": "메인", "haedamS4Main01": "메인", "haedamS8S10Main01": "메인", "haedamH1Main01": "메인", "haedamH2Main01": "메인", "haedamH3Main01": "메인", "haedamS12Main01": "메인", "haedamS7Main01": "메인",
+    "haedamS1Main01": "메인", "haedamS4Main01": "메인", "haedamS8S10Main01": "메인", "haedamH1Main01": "메인", "haedamH2Main01": "메인", "haedamH3Main01": "메인", "haedamH4Main01": "메인", "haedamS12Main01": "메인", "haedamS7Main01": "메인",
     "haedamResultLog01": "부품", "haedamDiscord01": "부품", "haedamPortalIp01": "부품", "haedamPfsense01": "부품",
     "haedamPortalPosting01": "부품", "haedamAccountLock01": "부품",
     "haedamWazuhRestore01": "부품", "haedamWazuhToken01": "부품",
@@ -30,6 +30,11 @@ S7_SCOPE = {wid: SCOPE[wid] for wid in (
     "haedamS7Main01", "haedamResultLog01", "haedamDiscord01",
     "haedamWazuhRestore01", "haedamWazuhToken01",
 )}
+
+# H4 needs only the portal path (no pfSense key): ticket → account lock → Discord, and haedam-50 to close the
+# ticket after the admin unlock (its pfSense sub-workflow is imported without a key; only S10 calls it)
+H4_SCOPE = {wid: SCOPE[wid] for wid in ("haedamH4Main01", "haedamResultLog01", "haedamDiscord01", "haedamAccountLock01",
+                                         "haedamRelease01", "haedamPortalIp01", "haedamPortalPosting01", "haedamPfsense01")}
 
 
 def env_file():
@@ -51,13 +56,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--s7", action="store_true",
                     help="import only S7 and its dependencies; does not require the pfSense SSH key")
+    ap.add_argument("--h4", action="store_true",
+                    help="import only H4 and its dependencies; does not require the pfSense SSH key")
     args = ap.parse_args()
-    scope = S7_SCOPE if args.s7 else SCOPE
+    partial = args.s7 or args.h4
+    scope = S7_SCOPE if args.s7 else H4_SCOPE if args.h4 else SCOPE
     env = env_file()
-    if not args.s7:
+    if not partial:
         key_file = ROOT / env.get("PF_SSH_PRIVATE_KEY_FILE", ".local/haedam-pf")
         env["PF_SSH_PRIVATE_KEY"] = key_file.read_text("utf-8")
-    creds = build_credentials(env, include_pfsense=not args.s7)
+    creds = build_credentials(env, include_pfsense=not partial)
     workflows = []
     for p in sorted((ROOT / "infra/n8n/workflows").glob("*.json")):
         w = json.loads(p.read_text("utf-8"))

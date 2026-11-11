@@ -10,19 +10,20 @@ from pathlib import Path
 from statistics import median
 
 ROOT = Path(__file__).resolve().parents[1]
-CASES = ["S10", "S8", "S1", "S4", "S7", "S12", "H1", "H2", "H3"]
-EXPECTED_VIA = {"S10": {"portal", "pfsense"}, "S8": {"portal"}, "S1": {"portal"}, "S4": {"portal"}, "S7": {"wazuh-ar"}, "S12": {"portal"}, "H1": {"portal"}, "H2": {"portal"}, "H3": {"portal"}}
+CASES = ["S10", "S8", "S1", "S4", "S7", "S12", "H1", "H2", "H3", "H4"]
+EXPECTED_VIA = {"S10": {"portal", "pfsense"}, "S8": {"portal"}, "S1": {"portal"}, "S4": {"portal"}, "S7": {"wazuh-ar"}, "S12": {"portal"}, "H1": {"portal"}, "H2": {"portal"}, "H3": {"portal"}, "H4": {"portal"}}
 RESPONSE_ACTIONS = ("block", "fw_block", "restrict_posting", "lock", "restore", "quarantine")
 # What the attacker / the normal user should get while the response is in force.
-REFUSED = {"H1": ("429",), "H3": ("401",), "S4": ("401",), "S7": ("baseline_hash",)}  # S7: the tampered path serves the baseline bytes again. H3: attacker = the locked staff login, normal = the owner's restored petitions
+REFUSED = {"H1": ("429",), "H3": ("401",), "H4": ("401",), "S4": ("401",), "S7": ("baseline_hash",)}  # S7: the tampered path serves the baseline bytes again. H3: attacker = the locked staff login, normal = the owner's restored petitions
 NORMAL_OK = {"H1": "201"}
 # Runs from before a fix are left out of the main table and counted separately below it. S10: pfSense read-after-apply and release verdict.
 # H1: the ticket store rejected case_id H1. See journal 2026-11-09.
 # H3: the staff-name restore returned only the last changed petition (the other two stayed changed). See tickets/H3/README.md.
+# H4: the lock record's Idempotency-Key `<execution id>-lock` was 7 characters on a fresh n8n (store needs 8).
 # S4: runs 1 minute apart hit the portal's login rate limit (20 per source in 5 minutes); spacing raised to 5 minutes.
 # The cut sits just after the third run's input so the baseline that followed stays in the main table.
 FIXED_AT = {"S10": "2026-11-09T03:46:00+00:00", "H1": "2026-11-09T06:56:00+00:00", "H3": "2026-11-11T05:50:00+00:00",
-            "S4": "2026-11-11T06:32:00+00:00"}
+            "S4": "2026-11-11T06:32:00+00:00", "H4": "2026-11-11T18:44:00+00:00"}
 
 
 def _ts(t):

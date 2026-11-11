@@ -78,7 +78,10 @@ def detail(petition_id):
         if existing is not None and existing.applicant_id != g.user.id:
             emit("petition.access_denied", "failure", 403, username=g.user.username)
             fail(403, "FORBIDDEN", "다른 시민의 민원 상세는 조회할 수 없습니다.")
-    return ok(get_petition(petition_id).public(True))
+    petition = get_petition(petition_id)
+    if g.user.role == "staff":  # H4: a staff account reading many citizens' petitions in a short time
+        emit("petition.viewed", "success", 200, username=g.user.username, petition_id=petition_id)
+    return ok(petition.public(True))
 
 
 @bp.patch("/<int:petition_id>/assignment")

@@ -4,18 +4,18 @@
 
 - **팀 원본:** [aleph-soar-capstone](https://github.com/NoBugs-Aleph/aleph-soar-capstone) · [haedam-portal-backend](https://github.com/NoBugs-Aleph/haedam-portal-backend) · [haedam-portal-frontend](https://github.com/NoBugs-Aleph/haedam-portal-frontend)
 - **팀원:** A · B · C · D (담당은 [CREDITS.md](CREDITS.md))
-- **본인(A):** 팀에서는 포털 서비스·대응 API와 S1·S4(계정 탈취) 담당. 이 저장소에서는 PC 한 대 구성 전체(compose, pfSense QEMU 컨테이너, Graylog·n8n 반입 스크립트, 티켓 실행기, 실습 제어판, 문서)를 작성하고 실측했습니다. 신규 시나리오 H1~H3을 추가하고 팀 티켓 S7·S12를 이 구성에서 실측까지 연결했습니다.
+- **본인(A):** 팀에서는 포털 서비스·대응 API와 S1·S4(계정 탈취) 담당. 이 저장소에서는 PC 한 대 구성 전체(compose, pfSense QEMU 컨테이너, Graylog·n8n 반입 스크립트, 티켓 실행기, 실습 제어판, 문서)를 작성하고 실측했습니다. 신규 시나리오 H1~H4를 추가하고 팀 티켓 S7·S12를 이 구성에서 실측까지 연결했습니다.
 
 ## 결과 요약
 
-수정 후 9종 28회 실측(2026-11-09~12, PC 한 대). 원자료는 `docs/tickets/*/runs.jsonl`, 표와 해석은 [정량평가](docs/정량평가.md).
+수정 후 10종 31회 실측(2026-11-09~12, PC 한 대). 원자료는 `docs/tickets/*/runs.jsonl`, 표와 해석은 [정량평가](docs/정량평가.md).
 
 | 자동 대응 | 원복 | 정상 사용자 영향 | 기준선 오탐 | 입력→차단 중앙값 | MTTD 중앙값 |
 | --- | --- | --- | --- | --- | --- |
-| **28/28** | **28/28** | **0회** | **0/10** | 34.77초 | 0.63초 |
+| **31/31** | **31/31** | **0회** | **0/11** | 33.65초 | 0.58초 |
 
-- 같은 케이스를 ① 프로젝트 코드 없는 raw 명령 ② 스크립트 ③ 제어판 세 경로로 공격해 9종 모두 같은 탐지→대응→원복을 확인했습니다([검증 체크리스트](docs/검증-체크리스트.md)).
-- 수정 전 실패 9회는 위 표에서 빼고 원인·수정과 함께 따로 적었습니다.
+- 같은 케이스를 ① 프로젝트 코드 없는 raw 명령 ② 스크립트 ③ 제어판 세 경로로 공격해 10종 모두 같은 탐지→대응→원복을 확인했습니다([검증 체크리스트](docs/검증-체크리스트.md)).
+- 수정 전 실패 10회는 위 표에서 빼고 원인·수정과 함께 따로 적었습니다.
 - 미검증: S7 Discord 알림 수신(이 PC에 웹훅 미설정). 발표 자료는 [docs/취업준비](docs/취업준비/PPT-슬라이드-구성.md).
 
 ## 구성
@@ -114,6 +114,7 @@ python infra/graylog/bootstrap.py --live      # 입력·스트림·파이프라�
 python infra/n8n/load.py                      # 자격 증명·워크플로 반입, 웹훅·하위 워크플로 게시
 python infra/wazuh/enable_s7.py               # S7: Wazuh FIM 경보를 Graylog로 전달
 python infra/n8n/load.py --s7                 # S7: 홈페이지 변조 워크플로·Wazuh AR 하위 워크플로
+# pfSense 키 없이 일부만 넣을 때: load.py --s7 / load.py --h4 (전체 load.py는 모든 케이스 포함)
 ```
 
 - `--live`를 빼면 n8n이 관찰 모드(티켓 기록·차단 없음)로 돕니다. 실측에는 `--live`가 필요합니다.
@@ -148,6 +149,7 @@ OK   ticket-store  200 {"ok":true,...}
 ```powershell
 python lab/run_ticket.py S10 --restore        # S10·S8·S1·S4·S12·H1·H2
 python lab/h3/live.py                         # H3
+python lab/h4/live.py                         # H4 (회차 사이 5분)
 python lab/s7/live.py --file favicon.svg      # S7
 ```
 
@@ -162,11 +164,12 @@ python lab/s7/live.py --file favicon.svg      # S7
 | H1 민원 도배 | `203.0.113.14` | 같은 계정으로 민원 8건 연달아 | 그 계정만 작성 제한(429), 로그인·조회 유지 | [H1](docs/tickets/H1/README.md) |
 | H2 타인 민원 엿보기 | `203.0.113.15` | 타인 민원 상세 403 ×3 | 출발지 차단 + 계정 잠금, 원복 뒤에도 타인 민원 403 | [H2](docs/tickets/H2/README.md) |
 | H3 처리 결과 조작 | 담당자 계정 | 담당자가 민원 3건 연달아 변경 | 담당자 잠금 + 변경 전 스냅샷으로 복원 | [H3](docs/tickets/H3/README.md) |
+| H4 담당자 대량 조회 | 담당자 계정 | 담당자가 민원 상세 25건 연달아 조회 | 담당자 잠금·세션 회수, 관리자 확인 뒤 해제 | [H4](docs/tickets/H4/README.md) |
 
 실행기는 다음 순서로 진행하고 결과를 `docs/tickets/<ID>/runs.jsonl`에 한 줄씩 남깁니다.
 
 1. 사전 점검: 같은 출발지의 탐지 창이 지났는지, 남은 차단이 없는지(S7은 웹 루트가 기준 해시와 같은지)
-2. 입력(`attacker` 컨테이너, H3는 포털 API, S7은 포털 컨테이너 파일)
+2. 입력(`attacker` 컨테이너, H3·H4는 포털 API, S7은 포털 컨테이너 파일)
 3. 티켓 대기(Graylog가 1분마다 평가하므로 보통 30~70초)
 4. 효과: 공격자 거부와 `normal` 정상(케이스별 기대값은 정량평가 지표 정의)
 5. 원복: `--restore`는 n8n `haedam-50` 해제 또는 비밀번호 재설정·관리자 해제, 공격자가 정상 결과로 돌아오는지 확인

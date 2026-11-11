@@ -27,7 +27,7 @@ SRC = {"S1": "203.0.113.11", "S4": "203.0.113.13", "S12": "203.0.113.42", "S8": 
 # in 5 minutes (LOGIN_RATE_LIMIT), so runs closer than 5 minutes get 429 instead of the checked status.
 WINDOW_MIN = {"S1": 30, "S4": 5, "S8": 15, "S10": 15, "S12": 1, "H1": 10, "H2": 5}
 S12_POOL = ["203.0.113.42", "203.0.113.43", "203.0.113.44", "203.0.113.45", "203.0.113.46"]  # a fresh source per run so each gets its own ticket
-SEAT = {"S1": "A", "S4": "A", "S8": "B", "S10": "B", "S12": "D", "H1": "A", "H2": "C"}
+SEAT = {"S1": "A", "S4": "A", "S8": "B", "S10": "B", "S12": "D", "H1": "A", "H2": "C", "H4": "C"}
 H1_POSTS = 8  # 탐지 기준 N=5보다 넉넉히(초안). 기준선은 --baseline
 S4_FAILS, S4_HOLD = 5, 180  # 탐지: 10분 안 실패·성공 합계 6건 이상(card(rule)>1, count()>5)
 H2_VIEWS = {False: 3, True: 2}  # 탐지는 5분 안 3건 이상(초안). 기준선: 잘못 연 링크 2건
