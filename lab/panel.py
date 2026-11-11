@@ -37,7 +37,8 @@ def now():
 
 
 def attack(case):
-    src, log = SRC[case], []
+    # 입력을 보내기 전 시각: 입력 중에 들어온 로그도 ②에서 세야 한다(끝난 뒤 시각이면 ②가 0건으로 남음)
+    src, log, started = SRC[case], [], datetime.now(timezone.utc)
     if case in ("S10", "S8"):
         if case == "S10":
             cmd = f"ping -I {src} -c 1 -W 1 203.0.113.1"
@@ -112,7 +113,7 @@ def attack(case):
         log.append({"step": "같은 계정에 틀린 비밀번호 9번", "cmd": f"docker exec haedam-attacker python /lab/portal_login.py --source {src} fail {user} 9",
                     "result": fails})
     log.append({"step": "Graylog가 1분마다 평가 → 보통 30~70초 뒤 티켓·차단", "cmd": "", "result": "기다리는 중"})
-    RUNS[case] = {"at": datetime.now(timezone.utc), "effect": None, "released": None}
+    RUNS[case] = {"at": started, "effect": None, "released": None}
     return log
 
 
