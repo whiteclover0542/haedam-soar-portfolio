@@ -7,6 +7,7 @@ attempts an administrator unlock so a test staff account is not left locked.
 """
 
 import argparse
+import sys
 import http.cookiejar
 import json
 import secrets
@@ -18,6 +19,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from lab.run_ticket import RESPONSE_ACTIONS, mttd, ts  # noqa: E402
 PORTAL = "http://127.0.0.1:8080/api/v1"
 TICKETS = "http://127.0.0.1:8089/api/v1/tickets"
 
@@ -84,8 +87,8 @@ def new_ticket(username: str, before: set[str], timeout=390):
     return None
 
 
-def manipulate() -> dict:
-    """Create fresh zz_ staff/owner accounts, three petitions, and let the staff change all three."""
+def manipulate(updates: int = 3) -> dict:
+    """Create fresh zz_ staff/owner accounts and three petitions; the staff changes the first `updates` of them."""
     now = datetime.now(timezone.utc).strftime("%m%d%H%M%S")
     staff_name, owner_name = f"zz_h3_staff_{now}", f"zz_h3_owner_{now}"
     staff_password, owner_password = secrets.token_urlsafe(18), secrets.token_urlsafe(18)
@@ -116,7 +119,7 @@ def manipulate() -> dict:
         before = {item["ticket_id"] for item in json.loads(response.read())["items"] if item.get("group_key") == staff_name}
     input_at = datetime.now(timezone.utc).isoformat()
     statuses = []
-    for petition_id in petition_ids:
+    for petition_id in petition_ids[:updates]:
         code, body = staff_client.call("PATCH", f"/petitions/{petition_id}/assignment", {})
         must(code, 200, "petition assignment")
         code, body = staff_client.call("PATCH", f"/petitions/{petition_id}/status", {
@@ -145,8 +148,33 @@ def unlock(run: dict) -> int:
     return Portal().login(run["staff_name"], run["staff_password"])
 
 
-def run_round() -> dict:
-    run = manipulate()
+def record(run: dict, ticket: dict, seen: dict, unlocked: int) -> dict:
+    """Same shape as lab/run_ticket.py rows so tools/summarize_runs.py can count H3.
+    attacker = the locked staff login (401 refused), normal = the owner's petitions (200 when all are back to received)."""
+    acts = [(x["via"], x["action"], x["result"], x.get("finished_at")) for x in ticket.get("actions", [])]
+    done = [x for x in acts if x[1] in RESPONSE_ACTIONS and x[2] in ("applied", "already_applied") and x[3]]
+    det = ts(ticket.get("detected_at"))
+    normal = "200" if seen["owner_detail"] == 200 and seen["restored_status"] == "received" else         f"{seen['owner_detail']} {seen['restored_status']}"
+    return {"case": "H3", "src": "staff", "run_id": run["run_id"], "baseline": None, "input_at": run["input_at"],
+            "staff_username": run["staff_name"], "petition_ids": run["petition_ids"], "input": run["statuses"],
+            "ticket_id": ticket["ticket_id"], "status": ticket["status"], "actions": acts,
+            "mttd_s": mttd(ts(ticket["condition_met_at"]), det) if ticket.get("condition_met_at") and det else None,
+            "detect_to_block_s": round(max((ts(x[3]) - det).total_seconds() for x in done), 3) if done and det else None,
+            "input_to_block_s": round(max((ts(x[3]) - ts(run["input_at"])).total_seconds() for x in done), 3) if done else None,
+            "effect": {"attacker": str(seen["locked_staff_login"]), "normal": normal},
+            "restore": {"verdict": "unlocked_by_admin", "attacker_after": str(unlocked)}}
+
+
+def run_round(baseline: bool = False) -> dict:
+    run = manipulate(2 if baseline else 3)
+    if baseline:  # normal pace: two changes stay below the 3-in-5-minutes condition, so no ticket may appear
+        ticket = new_ticket(run["staff_name"], run["before"])
+        if ticket:
+            unlock(run)  # do not leave the test staff locked
+        return {"case": "H3", "src": "staff", "run_id": run["run_id"], "baseline": True, "input_at": run["input_at"],
+                "staff_username": run["staff_name"], "input": run["statuses"],
+                "ticket_id": ticket and ticket["ticket_id"], "result": "fail" if ticket else "pass",
+                "reason": "false positive: ticket for normal pace" if ticket else None}
     locked = False
     try:
         ticket = new_ticket(run["staff_name"], run["before"])
@@ -158,15 +186,10 @@ def run_round() -> dict:
             if seen["restored_status"] == "received" and seen["locked_staff_login"] == 401:
                 break
             time.sleep(2)
-        checks = {**seen, "unlocked_staff_login": unlock(run)}
-        result = {
-            "case_id": "H3", "run_date": datetime.now(timezone.utc).date().isoformat(), "run_id": run["run_id"],
-            "staff_username": run["staff_name"], "petition_ids": run["petition_ids"], "trigger_updates": 3,
-            "ticket_id": ticket["ticket_id"], "restored_petition_ids": run["petition_ids"],
-            **checks, "result": assess(ticket, checks), "input_at": run["input_at"],
-        }
-        if result["result"] != "pass":
-            raise RuntimeError("H3 verification did not meet every success condition")
+        ticket = json.loads(urllib.request.urlopen(f"{TICKETS}/{ticket['ticket_id']}", timeout=10).read())["ticket"]
+        unlocked = unlock(run)
+        result = record(run, ticket, seen, unlocked)
+        result["result"] = assess(ticket, {**seen, "unlocked_staff_login": unlocked})
         return result
     except Exception:
         if locked:
@@ -175,11 +198,13 @@ def run_round() -> dict:
 
 
 def main() -> None:
-    result = run_round()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--baseline", action="store_true", help="two changes at normal pace; pass = no ticket")
+    result = run_round(parser.parse_args().baseline)
     path = ROOT / "docs" / "tickets" / "H3" / "runs.jsonl"
     with path.open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(result, ensure_ascii=False) + "\n")
-    print(json.dumps({key: result[key] for key in ("case_id", "run_id", "ticket_id", "result")}, ensure_ascii=False))
+    print(json.dumps({key: result[key] for key in ("case", "run_id", "ticket_id", "result")}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

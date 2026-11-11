@@ -51,7 +51,7 @@
                     0
                 ],
                 "parameters": {
-                    "jsCode": "const x=$input.first().json.ctx; return [{json:{ctx:x,mode:'record',stage:'detected',seat:x.seat,case_id:x.case_id,group_key:x.group_key,title:x.title,asset_id:x.asset_id,src_ip:null,username:x.username,event_ids:[x.event_id],action:null,idempotency_key:`${$execution.id}-detected`}}];"
+                    "jsCode": "const x=$input.first().json.ctx; return [{json:{ctx:x,mode:'record',stage:'detected',seat:x.seat,case_id:x.case_id,group_key:x.group_key,title:x.title,asset_id:x.asset_id,src_ip:null,username:x.username,event_ids:[x.event_id],condition_met_at:x.condition_met_at||null,detected_at:x.detected_at||null,action:null,idempotency_key:`${$execution.id}-detected`}}];"
                 }
             },
             {

@@ -88,9 +88,10 @@ def test_h3_notification_uses_only_aggregate_fields_that_graylog_preserves():
     assert "revision_id" not in template
     rendered = template.replace("${event.id}", "event-1").replace(
         "${event.fields.username}", "staff-1"
-    ).replace("${event.fields.case_id}", "H3")
+    ).replace("${event.fields.case_id}", "H3").replace("${event.timestamp}", "t1").replace("${event.timestamp_processing}", "t2")
     assert json.loads(rendered) == {
-        "event_id": "event-1", "asset_id": "haedam-portal", "username": "staff-1", "case_id": "H3"
+        "event_id": "event-1", "asset_id": "haedam-portal", "username": "staff-1", "case_id": "H3",
+        "condition_met_at": "t1", "detected_at": "t2",
     }
 
 
