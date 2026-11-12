@@ -219,13 +219,18 @@ def active_actions(conn, ticket_id):
     return list(active.values())
 
 
+# S7: the Wazuh restore is the fix itself (the file is back to its baseline), not a block to lift later.
+# It stays "active" for record matching (an effect record attaches to it), but it never holds a close.
+ONE_SHOT = (("wazuh-ar", "restore"),)
+
+
 def close_ticket(conn, ticket_id, note, now=None):
     """Human close from the dashboard. Only verified or restored tickets can close, and only
     when no applied action is left unreleased (a closed ticket would hide a live block)."""
     ticket = get_ticket(conn, ticket_id)
     if ticket["status"] not in CLOSABLE:
         raise InvalidTransition(f"{ticket['status']} cannot be closed")
-    if active_actions(conn, ticket_id):
+    if [a for a in active_actions(conn, ticket_id) if (a["via"], a["action"]) not in ONE_SHOT]:
         raise InvalidTransition("active action remains")
     now = now or now_iso()
     with conn:
@@ -360,5 +365,7 @@ def dashboard_cases(conn, seat=None, include_sample=False):
 
 
 def dashboard_has_active(conn, ticket_id):
-    sql = _WORK_CTE.replace("FROM actions a WHERE duplicate = 0", "FROM actions a WHERE duplicate = 0 AND ticket_id = ?") + " SELECT 1 FROM lifecycle WHERE rn=1 AND result IN ('applied','already_applied') LIMIT 1"
+    sql = (_WORK_CTE.replace("FROM actions a WHERE duplicate = 0", "FROM actions a WHERE duplicate = 0 AND ticket_id = ?")
+           + " SELECT 1 FROM lifecycle WHERE rn=1 AND result IN ('applied','already_applied')"
+           " AND NOT (via = 'wazuh-ar' AND action = 'restore') LIMIT 1")   # ONE_SHOT, same rule as close_ticket
     return conn.execute(sql, (ticket_id,)).fetchone() is not None

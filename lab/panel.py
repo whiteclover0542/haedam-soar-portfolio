@@ -115,13 +115,41 @@ def s7_effect():
             {"step": "포털 첫 화면", "cmd": "GET /", "result": str(home)}]
 
 
+def s7_record_verified(ticket, act):
+    """Mark the Wazuh restore effect-verified on the ticket (status → verified) so a person can close it.
+    The record API (8088) is only on the lab network, so it goes through the n8n container like n8n does."""
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    body = {"seat": ticket["seat"], "case_id": "S7", "group_key": ticket["group_key"], "stage": "effect",
+            "title": ticket["title"], "asset_id": ticket["asset_id"], "src_ip": None, "username": None,
+            "event_ids": [f"s7-verify-{ticket['ticket_id']}"],
+            "action": {**{k: act[k] for k in ("bot", "target", "via", "action", "result", "applied_verified",
+                                              "requested_at", "finished_at", "n8n_execution_id")},
+                       "effect_verified": True, "effect_verified_at": now}}
+    js = ("fetch('http://10.250.0.3:8088/api/v1/tickets/record',{method:'POST',headers:{'X-Response-Key':process.env.K,"
+          "'Idempotency-Key':process.env.I,'Content-Type':'application/json'},body:process.env.B}).then(r=>console.log(r.status))")
+    return sh("docker", "exec", "haedam-n8n", "node", "-e", js,
+              env_vars={"K": env()["TICKET_STORE_KEY"], "I": f"s7-verify-{ticket['ticket_id']}", "B": json.dumps(body)})
+
+
 def s7_release():
-    run = RUNS.get("S7")
-    if not run:
-        return [{"step": "이번 실행에서 [공격]을 먼저 누르세요", "cmd": "", "result": "-"}]
+    """Verify the whole web root against the baseline; if it matches, every open S7 ticket whose restore is not
+    yet confirmed gets the effect record, so it can be closed on the dashboard (S7 has nothing to unblock)."""
     result = s7.verify()
-    run["released"] = {"verified": result == "ok"}
-    return [{"step": "기준 해시 전체 검증(복구는 이미 자동으로 끝남)", "cmd": "s7_restore.py verify", "result": result}]
+    if "S7" in RUNS:
+        RUNS["S7"]["released"] = {"verified": result == "ok"}
+    out = [{"step": "기준 해시 전체 검증(복구는 이미 자동으로 끝남)", "cmd": "s7_restore.py verify", "result": result}]
+    if result != "ok":
+        return out
+    for item in get(f"{TICKETS}?status=responding&limit=200")["items"]:
+        if item["case_id"] != "S7":
+            continue
+        t = get(f"{TICKETS}/{item['ticket_id']}")["ticket"]
+        for act in t["actions"]:
+            if act["via"] == "wazuh-ar" and act["action"] == "restore" and act["result"] in ("applied", "already_applied") \
+                    and act["effect_verified"] is None and not act.get("duplicate"):
+                out.append({"step": f"{t['ticket_id']} 복구 확인 기록 → 효과 확인(대시보드에서 닫기 가능)",
+                            "cmd": "POST 10.250.0.3:8088/api/v1/tickets/record (stage effect)", "result": s7_record_verified(t, act)})
+    return out
 
 
 def attack(case):
@@ -581,7 +609,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/":
-            return self._send(200, PAGE.replace("__TOKEN__", TOKEN), "text/html")
+            return self._send(200, PAGE.replace("__TOKEN__", TOKEN).replace("__N8N_PORT__", env().get("N8N_HOST_PORT", "5678")), "text/html")
         if self.path == "/api/state" and self.headers.get("X-Panel-Token") == TOKEN:
             return self._send(200, state())
         self._send(404, {"error": "not found"})
@@ -632,8 +660,8 @@ li b{display:block}li span{color:var(--mute)}li a{color:var(--blue);font-size:13
 details{margin:0 24px 32px}summary{cursor:pointer;color:var(--mute)}.entry{border-top:1px solid var(--line);padding:6px 0;font-size:14px}.entry code{color:var(--mute);font-size:12px;word-break:break-all}
 </style></head><body>
 <header><h1>해담 SOAR 실습 제어판</h1><p>티켓을 고르고 [공격]을 누른 뒤, 아래 단계가 차례로 초록색이 되는 것을 지켜보세요.</p></header>
-<nav><a href="http://127.0.0.1:9000" target="_blank">Graylog</a><a href="https://127.0.0.1:5601" target="_blank">Wazuh</a><a href="http://127.0.0.1:{env().get('N8N_HOST_PORT', '5678')}" target="_blank">n8n</a>
-<a href="http://127.0.0.1:8089" target="_blank">티켓 대시보드</a><a href="https://127.0.0.1:8443" target="_blank">pfSense</a><a href="http://127.0.0.1:8080" target="_blank">민원 포털</a></nav>
+<nav><a href="http://127.0.0.1:8080" target="_blank">민원 포털</a><a href="http://127.0.0.1:8089" target="_blank">티켓 대시보드</a><a href="https://127.0.0.1:8443" target="_blank">pfSense</a>
+<a href="http://127.0.0.1:9000" target="_blank">Graylog</a><a href="https://127.0.0.1:5601" target="_blank">Wazuh</a><a href="http://127.0.0.1:__N8N_PORT__" target="_blank">n8n</a></nav>
 <div class="tabs" id="tabs"></div><section class="panel" id="panel"></section>
 <details><summary>실행한 명령 보기</summary><div id="entries"></div></details>
 <script>
