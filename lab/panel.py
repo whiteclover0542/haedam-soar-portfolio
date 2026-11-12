@@ -581,7 +581,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/":
-            return self._send(200, PAGE.replace("__TOKEN__", TOKEN), "text/html")
+            return self._send(200, PAGE.replace("__TOKEN__", TOKEN).replace("__N8N_PORT__", env().get("N8N_HOST_PORT", "5678")), "text/html")
         if self.path == "/api/state" and self.headers.get("X-Panel-Token") == TOKEN:
             return self._send(200, state())
         self._send(404, {"error": "not found"})
@@ -632,8 +632,8 @@ li b{display:block}li span{color:var(--mute)}li a{color:var(--blue);font-size:13
 details{margin:0 24px 32px}summary{cursor:pointer;color:var(--mute)}.entry{border-top:1px solid var(--line);padding:6px 0;font-size:14px}.entry code{color:var(--mute);font-size:12px;word-break:break-all}
 </style></head><body>
 <header><h1>해담 SOAR 실습 제어판</h1><p>티켓을 고르고 [공격]을 누른 뒤, 아래 단계가 차례로 초록색이 되는 것을 지켜보세요.</p></header>
-<nav><a href="http://127.0.0.1:9000" target="_blank">Graylog</a><a href="https://127.0.0.1:5601" target="_blank">Wazuh</a><a href="http://127.0.0.1:{env().get('N8N_HOST_PORT', '5678')}" target="_blank">n8n</a>
-<a href="http://127.0.0.1:8089" target="_blank">티켓 대시보드</a><a href="https://127.0.0.1:8443" target="_blank">pfSense</a><a href="http://127.0.0.1:8080" target="_blank">민원 포털</a></nav>
+<nav><a href="http://127.0.0.1:8080" target="_blank">민원 포털</a><a href="http://127.0.0.1:8089" target="_blank">티켓 대시보드</a><a href="https://127.0.0.1:8443" target="_blank">pfSense</a>
+<a href="http://127.0.0.1:9000" target="_blank">Graylog</a><a href="https://127.0.0.1:5601" target="_blank">Wazuh</a><a href="http://127.0.0.1:__N8N_PORT__" target="_blank">n8n</a></nav>
 <div class="tabs" id="tabs"></div><section class="panel" id="panel"></section>
 <details><summary>실행한 명령 보기</summary><div id="entries"></div></details>
 <script>
