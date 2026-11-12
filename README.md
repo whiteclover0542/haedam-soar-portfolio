@@ -18,6 +18,70 @@
 - 수정 전 실패 10회는 위 표에서 빼고 원인·수정과 함께 따로 적었습니다.
 - 미검증: S7 Discord 알림 수신(이 PC에 웹훅 미설정). 발표 자료는 [docs/취업준비](docs/취업준비/PPT-슬라이드-구성.md).
 
+## 제어판으로 실행
+
+실습은 raw 명령 대신 제어판을 기준으로 진행한다. 케이스·문서·발표 자료의 순서는 모두 `H1 → H2 → H3 → H4 → S1 → S4 → S7 → S8 → S10 → S12`다.
+
+```powershell
+python tools/check_stack.py
+python lab/panel.py
+```
+
+1. `check_stack.py`에서 6개 항목이 모두 `OK`인지 확인한다.
+2. 브라우저에서 http://127.0.0.1:8099 를 열고 위 순서의 탭을 선택한다.
+3. **공격**을 누른 뒤 ①~⑤가 녹색인지 확인한다. Graylog·n8n·티켓 화면은 탭 위 링크로 연다.
+4. **효과 다시 확인**으로 공격자 거부와 정상 사용자 동작을 확인한다.
+5. 화면 증적을 남긴 뒤 **해제**를 눌러 ⑥까지 녹색인지 확인한다. 같은 케이스를 다시 실행할 때만 S10·S8은 15분, S1·S4는 5분을 기다린다.
+
+제어판은 실행 흐름을 안내할 뿐이고, 실제 경보·대응·티켓 기록은 Graylog·n8n·포털·pfSense·Wazuh에서 처리된다.
+
+## 실측 화면 증적
+
+아래 화면은 2026-11-12 로컬 실행에서 저장한 증적이다. 전체 파일과 촬영 위치는 [캡처 목록](docs/캡처-목록.md)에서 관리한다. Discord는 H1만 수신 화면을 확인했고, S7·H4 Discord 수신은 웹훅 미설정으로 미검증이다.
+
+### 스택과 관제 흐름
+
+<p>
+  <img src="docs/captures/check-stack-ok.png" alt="포털, Graylog, n8n, Wazuh, pfSense, 티켓 저장소가 모두 OK인 스택 점검" width="48%" />
+  <img src="docs/captures/ticket-dashboard.png" alt="여러 케이스가 restored 상태인 보안 티켓 대시보드" width="48%" />
+</p>
+<p>
+  <img src="docs/captures/pfsense-block-s10.png" alt="S10 뒤 203.0.113.22가 차단 테이블에 들어간 pfSense 화면" width="48%" />
+</p>
+
+### H1 · H2 민원 업무 악용
+
+<p>
+  <img src="docs/captures/h1-discord-ticket-0001.png" alt="H1 Discord 차단과 원복 카드" width="32%" />
+  <img src="docs/captures/h2-2-graylog-alerts-0002.png" alt="H2 Graylog 경보의 count와 그룹 키" width="32%" />
+  <img src="docs/captures/h2-3-n8n-executions-0002.png" alt="H2 대응과 기록 워크플로가 성공한 n8n 실행 이력" width="32%" />
+</p>
+
+### H3 · H4 담당자 계정 대응
+
+<p>
+  <img src="docs/captures/h3-restored-petitions.png" alt="H3 제어판의 민원 처리 결과 복원 확인" width="32%" />
+  <img src="docs/captures/h4-2-ticket-response-applied.png" alt="H4 티켓의 portal lock applied 대응 기록" width="32%" />
+  <img src="docs/captures/h4-3-panel-done.png" alt="H4 제어판의 해제까지 완료된 단계" width="32%" />
+</p>
+
+### S4 · S7 자동 복구
+
+<p>
+  <img src="docs/captures/s4-session-revoked-before.png" alt="S4 계정 잠금과 세션 회수 전 효과 확인" width="32%" />
+  <img src="docs/captures/s4-session-revoked-after.png" alt="S4 비밀번호 재설정 뒤 원복 확인" width="32%" />
+</p>
+<p>
+  <img src="docs/captures/s7-2-ticket-restore.png" alt="S7 티켓의 wazuh-ar restore applied 대응 기록" width="48%" />
+  <img src="docs/captures/s7-3-panel-done.png" alt="S7 제어판의 자동 복구 완료 단계" width="48%" />
+</p>
+
+### S10 경계 차단
+
+<p>
+  <img src="docs/captures/pfsense-block-s10.png" alt="S10 뒤 203.0.113.22가 차단 테이블에 들어간 pfSense 화면" width="48%" />
+</p>
+
 ## 구성
 
 ```mermaid
@@ -155,16 +219,16 @@ python lab/s7/live.py --file favicon.svg      # S7
 
 | 티켓 | 출발지 | 입력 | 기대 대응 | 문서 |
 | --- | --- | --- | --- | --- |
-| S10 경계 차단·스캔·로그인 반복 | `203.0.113.22` | 스캔 404 → 로그인 401 → ping(pfSense 차단) | 포털 차단 + pfSense 차단 | [S10](docs/tickets/S10/README.md) |
-| S8 포털 스캔·로그인 반복 | `203.0.113.21` | 스캔 404 → 로그인 401 | 포털 차단(pfSense 호출 없음) | [S8](docs/tickets/S8/README.md) |
-| S1 로그인 무차별 대입 | `203.0.113.11` | 같은 계정 로그인 실패 9회 | 출발지 차단, 계정 주인 로그인은 유지 | [S1](docs/tickets/S1/README.md) |
-| S4 실패 뒤 성공(계정 탈취) | `203.0.113.13` | 실패 5회 뒤 맞는 비밀번호 | 계정 잠금·세션 회수, 비밀번호 재설정으로 원복 | [S4](docs/tickets/S4/README.md) |
-| S7 홈페이지 파일 변조 | 포털 `/app/dist` | 기준 파일 해시 변경 | Wazuh AR로 기준본 복구 | [S7](docs/tickets/S7/README.md) |
-| S12 요청 폭주 | `203.0.113.42~46` | 60초에 요청 60건 초과 | 그 출발지만 포털 차단 | [S12](docs/tickets/S12/README.md) |
 | H1 민원 도배 | `203.0.113.14` | 같은 계정으로 민원 8건 연달아 | 그 계정만 작성 제한(429), 로그인·조회 유지 | [H1](docs/tickets/H1/README.md) |
 | H2 타인 민원 엿보기 | `203.0.113.15` | 타인 민원 상세 403 ×3 | 출발지 차단 + 계정 잠금, 원복 뒤에도 타인 민원 403 | [H2](docs/tickets/H2/README.md) |
 | H3 처리 결과 조작 | 담당자 계정 | 담당자가 민원 3건 연달아 변경 | 담당자 잠금 + 변경 전 스냅샷으로 복원 | [H3](docs/tickets/H3/README.md) |
 | H4 담당자 대량 조회 | 담당자 계정 | 담당자가 민원 상세 25건 연달아 조회 | 담당자 잠금·세션 회수, 관리자 확인 뒤 해제 | [H4](docs/tickets/H4/README.md) |
+| S1 로그인 무차별 대입 | `203.0.113.11` | 같은 계정 로그인 실패 9회 | 출발지 차단, 계정 주인 로그인은 유지 | [S1](docs/tickets/S1/README.md) |
+| S4 실패 뒤 성공(계정 탈취) | `203.0.113.13` | 실패 5회 뒤 맞는 비밀번호 | 계정 잠금·세션 회수, 비밀번호 재설정으로 원복 | [S4](docs/tickets/S4/README.md) |
+| S7 홈페이지 파일 변조 | 포털 `/app/dist` | 기준 파일 해시 변경 | Wazuh AR로 기준본 복구 | [S7](docs/tickets/S7/README.md) |
+| S8 포털 스캔·로그인 반복 | `203.0.113.21` | 스캔 404 → 로그인 401 | 포털 차단(pfSense 호출 없음) | [S8](docs/tickets/S8/README.md) |
+| S10 경계 차단·스캔·로그인 반복 | `203.0.113.22` | 스캔 404 → 로그인 401 → ping(pfSense 차단) | 포털 차단 + pfSense 차단 | [S10](docs/tickets/S10/README.md) |
+| S12 요청 폭주 | `203.0.113.42~46` | 60초에 요청 60건 초과 | 그 출발지만 포털 차단 | [S12](docs/tickets/S12/README.md) |
 
 실행기는 다음 순서로 진행하고 결과를 `docs/tickets/<ID>/runs.jsonl`에 한 줄씩 남깁니다.
 

@@ -131,3 +131,20 @@ def test_h4_assess_needs_lock_refusal_citizen_restore_and_permission():
     assert panel.h4.assess({**run, "actions": []}) == "fail"  # locked but not recorded (the pre-fix run)
     assert panel.h4.assess({**run, "effect": {"attacker": "200", "normal": "200"}}) == "fail"
     assert panel.h4.assess({**run, "restore": {**run["restore"], "status_after": "open"}}) == "fail"
+
+
+def test_s7_release_marks_open_restores_verified_only_after_the_hash_check_passes(monkeypatch):
+    # S7 has nothing to unblock: once the web root matches the baseline, the open S7 tickets get the effect
+    # record (status verified) so a person can close them; a mismatch must not mark anything.
+    tickets = {"T-1": {"ticket_id": "T-1", "case_id": "S7", "actions": [
+        {"via": "wazuh-ar", "action": "restore", "result": "applied", "effect_verified": None},
+        {"via": "wazuh-ar", "action": "restore", "result": "applied", "effect_verified": True}]}}
+    monkeypatch.setattr(panel, "get", lambda url: {"items": [{"ticket_id": "T-1", "case_id": "S7"}, {"ticket_id": "T-2", "case_id": "H1"}]}
+                        if "status=" in url else {"ticket": tickets[url.rsplit("/", 1)[1]]})
+    sent = []
+    monkeypatch.setattr(panel, "s7_record_verified", lambda t, a: sent.append(t["ticket_id"]) or "201")
+
+    monkeypatch.setattr(panel.s7, "verify", lambda: "mismatch")
+    assert len(panel.s7_release()) == 1 and sent == []
+    monkeypatch.setattr(panel.s7, "verify", lambda: "ok")
+    assert [x["result"] for x in panel.s7_release()] == ["ok", "201"] and sent == ["T-1"]

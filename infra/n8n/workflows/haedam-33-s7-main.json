@@ -275,7 +275,7 @@
     "type": "n8n-nodes-base.code",
     "typeVersion": 2,
     "position": [
-     3360,
+     4080,
      -140
     ],
     "parameters": {
@@ -366,6 +366,72 @@
     ],
     "parameters": {
      "jsCode": "\nconst validText = v => typeof v === 'string' && v.length > 0 && v.length <= 300 && !/[\\x00-\\x1f\\x7f]/.test(v);\nconst ticketId = v => typeof v === 'string' && /^T-\\d{8}-\\d{4}$/.test(v);\nconst states = ['open','responding','verified','restored','closed'];\nconst canon = a => a.via === 'pfsense' && a.action === 'fw_block' ? 'block' : a.action;\nconst same = (a,b) => a.bot === b.bot && a.via === b.via && canon(a) === canon(b) && a.target === b.target;\nconst refOK = (a, dry=false) => a && typeof a.bot === 'string' && /^(\\d{3}|manual)$/.test(a.bot) && ['portal','pfsense','wazuh-ar','manual'].includes(a.via) && typeof a.action === 'string' && /^[a-z][a-z_]{1,31}$/.test(a.action) && validText(a.target) && (a.result === undefined || ['applied','already_applied'].includes(a.result) || (dry && a.result === 'dry_run'));\nconst held = (ctx,code) => [{json:{ok:false,no_action:true,verdict:code,ctx}}];\nconst snapshotOK = j => j.ok === true && typeof j.exists === 'boolean' && Array.isArray(j.actions) && j.actions.every(a=>refOK(a,!!j.ctx?.cfg?.dry_run) && (['applied','already_applied'].includes(a.result) || (j.ctx?.cfg?.dry_run && a.result==='dry_run'))) && (j.exists ? ticketId(j.ticket_id) && states.includes(j.status) : j.ticket_id === null && j.status === null && j.actions.length === 0);\n\nconst j=$input.first().json,x=j.ctx,a=x?.record_ack;\nif(!snapshotOK(j) || !j.exists || !a || j.ticket_id!==a.ticket_id || !['open','responding','verified'].includes(j.status)) throw new Error('TICKET_CURRENT_REQUIRED');\nconst {record_ack,...ctx}=x;\nreturn [{json:{...a,ok:true,status:j.status,ticket_current:true,ctx}}];\n"
+    }
+   },
+   {
+    "id": "f1c9e0e1-e341-51c0-8933-8288150fe877",
+    "name": "자동 복구됨?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2.2,
+    "position": [
+     3360,
+     -140
+    ],
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": true,
+       "leftValue": "",
+       "typeValidation": "strict",
+       "version": 2
+      },
+      "conditions": [
+       {
+        "id": "d0278b93-8f3a-5545-8fe3-bac16f3da9c8",
+        "leftValue": "={{ !$json.ctx.cfg.dry_run && ($json.ctx.results || []).length > 0 && ($json.ctx.results || []).every(s => ['applied', 'already_applied'].includes(s.result)) }}",
+        "rightValue": "",
+        "operator": {
+         "type": "boolean",
+         "operation": "true",
+         "singleValue": true
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    }
+   },
+   {
+    "id": "f1de376a-75a6-5994-8a12-71b4af644fbf",
+    "name": "원복 알림 입력",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     3600,
+     -260
+    ],
+    "parameters": {
+     "jsCode": "// S7은 해제 웹훅(haedam-50)을 타지 않는다: Wazuh AR 복구가 곧 원복이므로 다른 케이스처럼 '원복 완료' 카드를 따로 보낸다.\n// haedam-11은 제목에 '원복'이 있으면 처리 상태를 '복구 완료'로 쓴다.\nconst r = $input.first().json;\nconst x = r.ctx;\nconst how = x.change_type === 'added' ? '새 파일 격리' : '자동 복구';\nreturn [{ json: { ctx: x, level: 'warn', case_id: x.case_id, title: `${x.title} 원복 완료(${how})`, src_ip: x.src_ip || undefined,\n  ticket_id: x.ticket?.ticket_id, result: 'restored', detail: (x.file_key ? `파일 ${x.file_key} ` : '') + '기준본과 같아짐' } }];"
+    }
+   },
+   {
+    "id": "bcf3dd64-22ad-5a15-aa78-0ab7637b020d",
+    "name": "Discord 원복 알림 (haedam-11)",
+    "type": "n8n-nodes-base.executeWorkflow",
+    "typeVersion": 1.2,
+    "position": [
+     3840,
+     -260
+    ],
+    "parameters": {
+     "source": "database",
+     "workflowId": {
+      "__rl": true,
+      "value": "haedamDiscord01",
+      "mode": "id"
+     },
+     "options": {}
     }
    }
   ],
@@ -531,7 +597,7 @@
     "main": [
      [
       {
-       "node": "최종 응답",
+       "node": "자동 복구됨?",
        "type": "main",
        "index": 0
       }
@@ -587,6 +653,46 @@
      [
       {
        "node": "조치1 입력 (Wazuh 복구·격리)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "자동 복구됨?": {
+    "main": [
+     [
+      {
+       "node": "원복 알림 입력",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "최종 응답",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "원복 알림 입력": {
+    "main": [
+     [
+      {
+       "node": "Discord 원복 알림 (haedam-11)",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Discord 원복 알림 (haedam-11)": {
+    "main": [
+     [
+      {
+       "node": "최종 응답",
        "type": "main",
        "index": 0
       }
